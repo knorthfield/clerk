@@ -15,6 +15,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: NO
     ENABLE_HARDENED_RUNTIME: YES
+    # Apple Silicon only. Support: the current macOS and the one before it (now 27 and 26).
+    ARCHS: arm64
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 packages:
   FluidAudio:

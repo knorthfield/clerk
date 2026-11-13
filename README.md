@@ -28,6 +28,19 @@ Everything runs on your Mac. Your meetings do not go to the internet.
 - Summary, action items and automatic ticks: Apple Intelligence (the on-device Foundation Models).
   Without Apple Intelligence, Clerk still writes the transcript, and you tick points by hand.
 
+## Install
+
+Needs a Mac with Apple Silicon and macOS 26 or later. Clerk supports the current macOS and the
+version before it.
+
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask knorthfield/tap/clerk
+```
+
+Or download `Clerk.zip` from the [latest release](https://github.com/knorthfield/clerk/releases/latest).
+
 ## Use
 
 1. Click the icon in the menu bar, then **Meeting Prep…**. Fill in the boxes.
@@ -43,7 +56,7 @@ Use headphones if you can. With speakers, your microphone also hears the other p
 
 ## Build
 
-Needs macOS 26, Xcode 26 and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Needs a Mac with Apple Silicon, macOS 26 or later, Xcode 26 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
 echo 'DEVELOPMENT_TEAM = <your team ID>' > Local.xcconfig
