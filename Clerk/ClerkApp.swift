@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // The unit tests run inside the app: do not add a login item or show a window.
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         LoginItem.enableOnFirstLaunch()
+        meeting.loadModel()
     }
 }
 
@@ -33,10 +34,15 @@ private struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        Text(meeting.status)
         if meeting.isRecording {
             Button("Stop Meeting") { meeting.stop() }
         } else {
             Button("Start Meeting") { meeting.start() }
+                .disabled(!meeting.canStart)
+        }
+        if meeting.modelFailed {
+            Button("Try Again") { meeting.loadModel() }
         }
         Button("Meeting Prep…") {
             openWindow(id: "prep")

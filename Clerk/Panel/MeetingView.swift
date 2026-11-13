@@ -31,9 +31,11 @@ private struct NotesHalf: View {
                     .controlSize(.small)
             }
             .font(.headline)
-            LevelBar(label: "Me", level: meeting.micLevel)
-            LevelBar(label: "Others", level: meeting.othersLevel)
-            Spacer()
+            HStack(spacing: 16) {
+                LevelBar(label: "Me", level: meeting.micLevel)
+                LevelBar(label: "Others", level: meeting.othersLevel)
+            }
+            LiveTranscript(chunks: meeting.chunks.suffix(20))
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -46,7 +48,7 @@ private struct LevelBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(label).font(.caption).foregroundStyle(.secondary).frame(width: 44, alignment: .leading)
+            Text(label).font(.caption).foregroundStyle(.secondary).fixedSize()
             GeometryReader { geometry in
                 Capsule().fill(.quaternary)
                     .overlay(alignment: .leading) {
@@ -56,6 +58,31 @@ private struct LevelBar: View {
             .frame(height: 4)
             .animation(.linear(duration: 0.1), value: level)
         }
+    }
+}
+
+/// The newest text at the bottom, like a chat.
+private struct LiveTranscript: View {
+    let chunks: ArraySlice<Chunk>
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 6) {
+                if chunks.isEmpty {
+                    Text("Listening… the text shows about 15 seconds after it is said.")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(chunks) { chunk in
+                    Text("\(Text(chunk.isMe ? "Me" : "Others").bold()) \(chunk.text)")
+                        .foregroundStyle(chunk.isMe ? .secondary : .primary)
+                        .id(chunk.id)
+                }
+            }
+            .font(.callout)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollIndicators(.never)
+        .defaultScrollAnchor(.bottom)
     }
 }
 
