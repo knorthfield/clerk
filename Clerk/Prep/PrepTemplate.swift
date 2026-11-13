@@ -23,15 +23,38 @@ enum PrepTemplate {
 
         """
 
-    static let aiPrompt = """
-        Help me prepare for a meeting. Ask me about the meeting first if you need more information \
-        (who is coming, the purpose, what I want from it). Then fill in the template below. Keep the \
-        headings exactly as they are. In Participants, Agenda and Talking points, put one short item per \
-        line. Keep talking points short and specific, so that I can see quickly if we covered them. \
-        Answer with only the filled template, in one markdown code block.
-
-        \(blank)
+    /// Copy this to an AI assistant: the instructions, then your prep so far.
+    static func aiPrompt(with prep: String) -> String {
         """
+        Help me prepare for a meeting. Ask me about the meeting first if you need more information \
+        (who is coming, the purpose, what I want from it). Then fill in the template below; keep what I \
+        already wrote. Keep the headings exactly as they are. In Participants, Agenda and Talking points, \
+        put one short item per line. Keep talking points short and specific, so that I can see quickly if \
+        we covered them. Answer with only the filled template, in one markdown code block.
+
+        \(prep)
+        """
+    }
+
+    /// A filled template with these sections.
+    static func text(of sections: Sections) -> String {
+        """
+        # Meeting prep
+
+        ## Participants
+        \(sections.participants)
+
+        ## Agenda
+        \(sections.agenda)
+
+        ## Talking points
+        \(sections.talkingPoints)
+
+        ## Prep notes
+        \(sections.notes)
+
+        """
+    }
 
     struct Sections: Equatable {
         var participants = ""

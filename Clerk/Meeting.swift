@@ -188,7 +188,7 @@ final class Meeting {
         Task {
             await live.finish()
             var notes = MeetingNotes(
-                startedAt: startedAt, duration: duration, agenda: prep.agenda, prepNotes: prep.notes,
+                startedAt: startedAt, duration: duration, agenda: prep.sections.agenda, prepNotes: prep.sections.notes,
                 participants: prep.participantList, talkingPoints: talkingPoints, lines: []
             )
             let others = chunks.filter { !$0.isMe }

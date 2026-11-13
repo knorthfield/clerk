@@ -43,9 +43,11 @@ import Testing
     #expect(PrepTemplate.sections(of: "Just some notes\n# Title") == nil)
 }
 
-@MainActor @Test func clearEmptiesEveryBox() {
-    let prep = Prep(url: nil)
-    prep.notes = "a"; prep.agenda = "b"; prep.talkingPoints = "c"; prep.participants = "d"
-    prep.clear()
-    #expect([prep.notes, prep.agenda, prep.talkingPoints, prep.participants] == ["", "", "", ""])
+@Test func sectionsSurviveTheRoundTripThroughText() {
+    let sections = PrepTemplate.Sections(participants: "- Sarah", agenda: "1. Budget", talkingPoints: "- Travel", notes: "Notes")
+    #expect(PrepTemplate.sections(of: PrepTemplate.text(of: sections)) == sections)
+}
+
+@Test func aiPromptEndsWithThePrep() {
+    #expect(PrepTemplate.aiPrompt(with: "## Agenda\n- Budget").hasSuffix("\n\n## Agenda\n- Budget"))
 }

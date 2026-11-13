@@ -1,49 +1,36 @@
 import Foundation
 import Observation
 
-/// What you prepare before a meeting. It is kept until you change it, and copied into the meeting file.
+/// What you prepare before a meeting: one markdown text in the format of `PrepTemplate`.
+/// It is kept until you change it, and copied into the meeting file.
 @MainActor @Observable
 final class Prep {
-    var notes = "" { didSet { save() } }
-    var agenda = "" { didSet { save() } }
-    var talkingPoints = "" { didSet { save() } }
-    var participants = "" { didSet { save() } }
+    var text = PrepTemplate.blank { didSet { save() } }
 
-    @ObservationIgnored private let url: URL?
+    @ObservationIgnored private let folder: URL?
 
-    private struct Saved: Codable {
-        var notes, agenda, talkingPoints: String
-        var participants: String?
+    /// `folder` nil keeps the prep in memory only (for tests).
+    init(folder: URL? = Meeting.storageFolder) {
+        self.folder = folder
+        guard let folder else { return }
+        if let saved = try? String(contentsOf: folder.appending(path: "prep.md"), encoding: .utf8) {
+            text = saved
+        } else if let old = Self.version1Prep(in: folder) {
+            text = old
+        }
     }
 
-    /// `url` nil keeps the prep in memory only (for tests).
-    init(url: URL? = Meeting.storageFolder.appending(path: "prep.json")) {
-        self.url = url
-        guard let url, let data = try? Data(contentsOf: url),
-              let saved = try? JSONDecoder().decode(Saved.self, from: data)
-        else { return }
-        notes = saved.notes
-        agenda = saved.agenda
-        talkingPoints = saved.talkingPoints
-        participants = saved.participants ?? ""
+    /// The sections of the text. Text without the template's headings is all prep notes.
+    var sections: PrepTemplate.Sections {
+        PrepTemplate.sections(of: text) ?? PrepTemplate.Sections(notes: text.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Puts each section of a filled template into its box. False if the text is not a template.
-    func fill(fromTemplate markdown: String) -> Bool {
-        guard let sections = PrepTemplate.sections(of: markdown) else { return false }
-        participants = sections.participants
-        agenda = sections.agenda
-        talkingPoints = sections.talkingPoints
-        notes = sections.notes
-        return true
-    }
+    var talkingPointList: [String] { Self.lines(of: sections.talkingPoints) }
+    var participantList: [String] { Self.lines(of: sections.participants) }
 
-    func clear() {
-        _ = fill(fromTemplate: "## Agenda")
+    func reset() {
+        text = PrepTemplate.blank
     }
-
-    var talkingPointList: [String] { Self.lines(of: talkingPoints) }
-    var participantList: [String] { Self.lines(of: participants) }
 
     /// One item per line. List markers (`-`, `*`, `•`, `1.`, `1)`, `[ ]`) and empty lines are removed.
     nonisolated static func lines(of text: String) -> [String] {
@@ -56,10 +43,24 @@ final class Prep {
         }
     }
 
+    /// Version 1.0 kept four boxes in prep.json. Turn them into one text.
+    private static func version1Prep(in folder: URL) -> String? {
+        struct Saved: Codable {
+            var notes, agenda, talkingPoints: String
+            var participants: String?
+        }
+        guard let data = try? Data(contentsOf: folder.appending(path: "prep.json")),
+              let saved = try? JSONDecoder().decode(Saved.self, from: data)
+        else { return nil }
+        return PrepTemplate.text(of: PrepTemplate.Sections(
+            participants: saved.participants ?? "", agenda: saved.agenda,
+            talkingPoints: saved.talkingPoints, notes: saved.notes
+        ))
+    }
+
     private func save() {
-        guard let url else { return }
-        let saved = Saved(notes: notes, agenda: agenda, talkingPoints: talkingPoints, participants: participants)
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(saved).write(to: url, options: .atomic)
+        guard let folder else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? text.write(to: folder.appending(path: "prep.md"), atomically: true, encoding: .utf8)
     }
 }
