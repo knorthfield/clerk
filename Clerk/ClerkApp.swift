@@ -12,6 +12,9 @@ struct ClerkApp: App {
         Window("Meeting Prep", id: "prep") {
             PrepView(prep: appDelegate.prep)
         }
+        Settings {
+            SettingsView()
+        }
     }
 }
 
@@ -32,6 +35,7 @@ private struct MenuContent: View {
     let meeting: Meeting
     @State private var opensAtLogin = LoginItem.isEnabled
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Text(meeting.status)
@@ -55,6 +59,11 @@ private struct MenuContent: View {
             Button("Allow Microphone…") { Task { await Permissions.requestMicrophone() } }
         }
         Divider()
+        Button("Settings…") {
+            openSettings()
+            NSApp.activate()
+        }
+        .keyboardShortcut(",")
         Toggle("Open at Login", isOn: $opensAtLogin)
             .onChange(of: opensAtLogin) { _, isOn in LoginItem.set(isOn) }
         Button("Quit Clerk") { NSApp.terminate(nil) }

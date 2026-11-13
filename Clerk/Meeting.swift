@@ -1,5 +1,5 @@
+import AppKit
 import FluidAudio
-import Foundation
 import Observation
 
 /// One meeting at a time: idle → recording → processing → idle.
@@ -36,6 +36,7 @@ final class Meeting {
     private static let coachInterval = Duration.seconds(30)
     private static let coachWindow: TimeInterval = 120
     @ObservationIgnored private lazy var panel = MeetingPanel(meeting: self)
+    @ObservationIgnored private let namesWindow = SpeakerNamesWindow()
 
     init(prep: Prep) {
         self.prep = prep
@@ -154,7 +155,6 @@ final class Meeting {
         guard stage == .recording, let live else { return }
         mic.stop()
         systemAudio.stop()
-        tracks = []
         micLevel = 0
         othersLevel = 0
         panel.hide()
@@ -162,9 +162,66 @@ final class Meeting {
         coach = nil
         stage = .processing
         self.live = nil
+        let startedAt = startedAt ?? .now
+        let duration = Date.now.timeIntervalSince(startedAt)
+        let othersURL = tracks.last?.url
+        tracks = []
         Task {
             await live.finish()
+            var notes = MeetingNotes(
+                startedAt: startedAt, duration: duration, agenda: prep.agenda, prepNotes: prep.notes,
+                talkingPoints: talkingPoints, lines: []
+            )
+            let others = chunks.filter { !$0.isMe }
+            var segments: [FinalTranscript.SpeakerSegment] = []
+            if !others.isEmpty, let othersURL {
+                do {
+                    segments = try await FinalTranscript.speakerSegments(of: othersURL)
+                } catch {
+                    lastError = "Speaker separation failed: \(error.localizedDescription)"
+                }
+            }
+            notes.lines = FinalTranscript.lines(chunks: chunks, otherSpeakers: segments)
+            if notes.lines.isEmpty {
+                notes.summaryProblem = "no speech was recorded"
+            } else if !MeetingAssistant.isAvailable {
+                notes.summaryProblem = "turn on Apple Intelligence"
+            } else {
+                do {
+                    notes.summary = try await MeetingAssistant.summary(
+                        of: notes.transcriptText, agenda: notes.agenda, prepNotes: notes.prepNotes)
+                } catch {
+                    notes.summaryProblem = error.localizedDescription
+                }
+            }
+            save(notes)
             stage = .idle
+        }
+    }
+
+    /// Writes the file at once, so it is never lost, then asks for the speakers' names.
+    private func save(_ notes: MeetingNotes) {
+        let folder = OutputFolder.url
+        let url = folder.appending(path: notes.fileName)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try notes.markdown.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            lastError = "The notes were not saved: \(error.localizedDescription)"
+            return
+        }
+        let speakers = notes.speakers.filter { $0 != FinalTranscript.me }.map { label in
+            SpeakerNamesView.Speaker(label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "")
+        }
+        guard !speakers.isEmpty else {
+            NSWorkspace.shared.open(url)
+            return
+        }
+        namesWindow.show(speakers: speakers) { names in
+            if !names.isEmpty, let markdown = try? String(contentsOf: url, encoding: .utf8) {
+                try? MeetingNotes.renaming(markdown, names: names).write(to: url, atomically: true, encoding: .utf8)
+            }
+            NSWorkspace.shared.open(url)
         }
     }
 
