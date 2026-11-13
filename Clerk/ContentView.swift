@@ -21,7 +21,10 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .naming(let request):
-                SpeakerNamesView(speakers: request.speakers, participants: request.participants) { names in
+                SpeakerNamesView(
+                    speakers: request.speakers, participants: request.participants,
+                    suggestedNames: request.suggestedNames
+                ) { names in
                     meeting.finishNaming(names)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

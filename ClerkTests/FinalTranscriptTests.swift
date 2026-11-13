@@ -48,9 +48,34 @@ private func chunk(_ text: String, isMe: Bool, start: TimeInterval) -> Chunk {
         .init(speakerID: "x", start: 0, end: 5.5),
         .init(speakerID: "y", start: 5.5, end: 20),
     ]
-    #expect(FinalTranscript.lines(chunks: chunks, otherSpeakers: segments) == [
+    #expect(FinalTranscript.lines(chunks: chunks, otherSpeakers: segments).lines == [
         Line(speaker: "Speaker 1", start: 0, text: "Hello all. Thanks for joining."),
         Line(speaker: "Me", start: 4, text: "Morning both."),
         Line(speaker: "Speaker 2", start: 6, text: "Hi. Great to be here."),
     ])
+}
+
+@Test func tapsSuggestNamesForSpeakers() {
+    let segments: [FinalTranscript.SpeakerSegment] = [
+        .init(speakerID: "x", start: 0, end: 10),
+        .init(speakerID: "y", start: 10, end: 20),
+    ]
+    let labels = ["x": "Speaker 1", "y": "Speaker 2"]
+    func mark(_ name: String, _ time: TimeInterval) -> FinalTranscript.SpeakerMark { .init(name: name, time: time) }
+
+    // One tap for each speaker.
+    #expect(FinalTranscript.suggestedNames(marks: [mark("Sarah", 1), mark("Priya", 11)], segments: segments, labels: labels)
+        == ["Speaker 1": "Sarah", "Speaker 2": "Priya"])
+    // A wrong tap loses to more right taps.
+    #expect(FinalTranscript.suggestedNames(
+        marks: [mark("Sarah", 1), mark("Priya", 2), mark("Sarah", 5)], segments: segments, labels: labels)
+        == ["Speaker 1": "Sarah"])
+    // A name goes to one speaker only: the one with more taps.
+    #expect(FinalTranscript.suggestedNames(
+        marks: [mark("Sarah", 1), mark("Sarah", 12), mark("Sarah", 15)], segments: segments, labels: labels)
+        == ["Speaker 2": "Sarah"])
+    // A tap in silence goes to the nearest speaker. No segments, no names.
+    #expect(FinalTranscript.suggestedNames(marks: [mark("Sarah", 30)], segments: segments, labels: labels)
+        == ["Speaker 2": "Sarah"])
+    #expect(FinalTranscript.suggestedNames(marks: [mark("Sarah", 1)], segments: [], labels: [:]) == [:])
 }

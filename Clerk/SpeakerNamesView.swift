@@ -12,6 +12,7 @@ struct SpeakerNamesView: View {
 
     let speakers: [Speaker]
     let participants: [String]
+    let suggestedNames: [String: String]
     let onDone: ([String: String]) -> Void
     @State private var names: [String: String] = [:]
 
@@ -28,6 +29,10 @@ struct SpeakerNamesView: View {
                  ? "Type a name for each speaker, or leave it empty to keep the number."
                  : "Pick a participant for each speaker, or type a name. Leave it empty to keep the number.")
                 .foregroundStyle(.secondary)
+            if !suggestedNames.isEmpty {
+                Text("The names you tapped during the meeting are filled in. Check them.")
+                    .foregroundStyle(.secondary)
+            }
             ForEach(speakers) { speaker in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -60,6 +65,7 @@ struct SpeakerNamesView: View {
         }
         .padding(20)
         .frame(width: 460)
+        .onAppear { names = suggestedNames }
     }
 
     private func binding(for label: String) -> Binding<String> {

@@ -48,6 +48,8 @@ Or download `Clerk.zip` from the [latest release](https://github.com/knorthfield
 2. Click **Start Meeting** (⌘↩) when the meeting starts. The first time, macOS asks for access to
    the microphone and to system audio recording. Allow both.
 3. Click a talking point to tick or untick it yourself.
+   If you added participants, tap a name in the panel when that person talks. After the meeting,
+   Clerk uses your taps to fill in the speakers' names.
 4. Click **Stop** in the panel. After a short time, pick the speakers' names, and the notes show.
 5. Click **New Meeting** (⌘N) to go back to the prep.
 

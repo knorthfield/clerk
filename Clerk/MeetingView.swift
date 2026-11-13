@@ -41,6 +41,9 @@ private struct NotesHalf: View {
                 LevelBar(label: "Me", level: meeting.micLevel)
                 LevelBar(label: "Others", level: meeting.othersLevel)
             }
+            if !meeting.participants.isEmpty {
+                SpeakerButtons(meeting: meeting)
+            }
             LiveTranscript(chunks: meeting.chunks.suffix(20))
         }
         .padding(16)
@@ -64,6 +67,32 @@ private struct LevelBar: View {
             .frame(height: 4)
             .animation(.linear(duration: 0.1), value: level)
         }
+    }
+}
+
+/// Tap a participant when they talk. After the meeting, Clerk uses the taps to fill in their names.
+private struct SpeakerButtons: View {
+    let meeting: Meeting
+
+    var body: some View {
+        let lastName = meeting.speakerMarks.last?.name
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(meeting.participants, id: \.self) { name in
+                    let isLast = name == lastName
+                    // The panel never becomes active, so draw the buttons ourselves (see Stop).
+                    Button { meeting.markSpeaker(name) } label: {
+                        Text(name).font(.caption.weight(.medium))
+                            .foregroundStyle(isLast ? .white : .primary)
+                            .padding(.horizontal, 10).padding(.vertical, 3)
+                            .background(isLast ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary), in: .capsule)
+                    }
+                    .buttonStyle(.plain)
+                    .help("\(name) is talking now")
+                }
+            }
+        }
+        .scrollIndicators(.never)
     }
 }
 

@@ -35,7 +35,14 @@ enum FinalTranscript {
         }
     }
 
-    static func lines(chunks: [Chunk], otherSpeakers segments: [SpeakerSegment]) -> [Line] {
+    /// A participant's name that you tapped in the panel during the meeting, and when.
+    struct SpeakerMark: Equatable {
+        let name: String
+        let time: TimeInterval
+    }
+
+    /// The transcript, and the label ("Speaker 1"…) of each speaker ID.
+    static func lines(chunks: [Chunk], otherSpeakers segments: [SpeakerSegment]) -> (lines: [Line], labels: [String: String]) {
         var labels: [String: String] = [:]
         let sentences = chunks
             .flatMap { chunk in sentences(of: chunk).map { (sentence: $0, isMe: chunk.isMe) } }
@@ -60,7 +67,25 @@ enum FinalTranscript {
                 lines.append(Line(speaker: speaker, start: sentence.start, text: sentence.text))
             }
         }
-        return lines
+        return (lines, labels)
+    }
+
+    /// The names to suggest for the labels, from the taps. Each tap votes for the speaker who talks
+    /// in the 3 s after it. The most votes win, and each name goes to one label only.
+    static func suggestedNames(marks: [SpeakerMark], segments: [SpeakerSegment], labels: [String: String]) -> [String: String] {
+        var votes: [String: [String: Int]] = [:]
+        for mark in marks {
+            guard let id = speakerID(from: mark.time, to: mark.time + 3, in: segments), let label = labels[id] else { continue }
+            votes[label, default: [:]][mark.name, default: 0] += 1
+        }
+        let candidates = votes
+            .flatMap { label, names in names.map { (label: label, name: $0.key, count: $0.value) } }
+            .sorted { ($1.count, $0.label, $0.name) < ($0.count, $1.label, $1.name) }
+        var names: [String: String] = [:]
+        for candidate in candidates where names[candidate.label] == nil && !names.values.contains(candidate.name) {
+            names[candidate.label] = candidate.name
+        }
+        return names
     }
 
     /// The speaker who overlaps the time most. With no overlap, the nearest segment's speaker.

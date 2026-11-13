@@ -17,6 +17,8 @@ final class Meeting {
         let url: URL
         let speakers: [SpeakerNamesView.Speaker]
         let participants: [String]
+        /// Names from the taps in the panel, by label.
+        let suggestedNames: [String: String]
     }
 
     private enum ModelState {
@@ -34,6 +36,9 @@ final class Meeting {
     var talkingPoints: [TalkingPoint] = []
     /// The transcript so far, in the order the chunks were transcribed.
     private(set) var chunks: [Chunk] = []
+    /// The participants from Meeting Prep, to tap when one of them talks.
+    private(set) var participants: [String] = []
+    private(set) var speakerMarks: [FinalTranscript.SpeakerMark] = []
 
     @ObservationIgnored private let prep: Prep
     @ObservationIgnored private let mic = MicRecorder()
@@ -147,6 +152,8 @@ final class Meeting {
         self.live = live
         lastError = nil
         chunks = []
+        participants = prep.participantList
+        speakerMarks = []
         talkingPoints = prep.talkingPointList.enumerated().map { TalkingPoint(id: $0.offset, text: $0.element) }
         startedAt = .now
         stage = .recording
@@ -204,7 +211,10 @@ final class Meeting {
                     lastError = "Speaker separation failed: \(error.localizedDescription)"
                 }
             }
-            notes.lines = FinalTranscript.lines(chunks: chunks, otherSpeakers: segments)
+            let transcript = FinalTranscript.lines(chunks: chunks, otherSpeakers: segments)
+            notes.lines = transcript.lines
+            let suggestedNames = FinalTranscript.suggestedNames(
+                marks: speakerMarks, segments: segments, labels: transcript.labels)
             if notes.lines.isEmpty {
                 notes.summaryProblem = "no speech was recorded"
             } else if !MeetingAssistant.isAvailable {
@@ -218,12 +228,12 @@ final class Meeting {
                     notes.summaryProblem = error.localizedDescription
                 }
             }
-            save(notes)
+            save(notes, suggestedNames: suggestedNames)
         }
     }
 
     /// Writes the file at once, so it is never lost, then asks for the speakers' names.
-    private func save(_ notes: MeetingNotes) {
+    private func save(_ notes: MeetingNotes, suggestedNames: [String: String]) {
         let folder = OutputFolder.url
         let url = folder.appending(path: notes.fileName)
         do {
@@ -239,7 +249,8 @@ final class Meeting {
         }
         stage = speakers.isEmpty
             ? .done(url)
-            : .naming(NamingRequest(url: url, speakers: speakers, participants: notes.participants))
+            : .naming(NamingRequest(
+                url: url, speakers: speakers, participants: notes.participants, suggestedNames: suggestedNames))
     }
 
     /// Puts the names in the file. No names keeps the numbers.
@@ -254,10 +265,18 @@ final class Meeting {
     /// Back to the prep, which still has the last meeting's text.
     func newMeeting() {
         chunks = []
+        participants = []
+        speakerMarks = []
         talkingPoints = []
         startedAt = nil
         lastError = nil
         stage = .prep
+    }
+
+    /// You tapped a participant's name because they talk now.
+    func markSpeaker(_ name: String) {
+        guard stage == .recording, let startedAt else { return }
+        speakerMarks.append(.init(name: name, time: Date.now.timeIntervalSince(startedAt)))
     }
 
     func toggle(_ point: TalkingPoint) {
