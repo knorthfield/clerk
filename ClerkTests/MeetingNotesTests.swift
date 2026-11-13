@@ -57,3 +57,11 @@ private func notes() -> MeetingNotes {
     #expect(parts.allSatisfy { $0.count <= MeetingAssistant.partLength })
     #expect(parts.joined().filter { $0 != "\n" } == text.filter { $0 != "\n" })
 }
+
+@MainActor @Test func aParticipantGivenToOneSpeakerIsNotOfferedToTheOthers() {
+    let participants = ["Sarah", "Daniel", "Priya"]
+    let names = ["Speaker 1": "Sarah", "Speaker 2": "  ", "Speaker 3": "Someone else"]
+    #expect(SpeakerNamesView.available(participants, names: names, for: "Speaker 2") == ["Daniel", "Priya"])
+    // A speaker's own choice stays on its own list, so you can see it.
+    #expect(SpeakerNamesView.available(participants, names: names, for: "Speaker 1") == ["Sarah", "Daniel", "Priya"])
+}

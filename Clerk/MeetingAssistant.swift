@@ -63,7 +63,9 @@ enum MeetingAssistant {
     /// so a long transcript is first made into notes, part by part.
     static let partLength = 6_000
 
-    static func summary(of transcript: String, agenda: String, prepNotes: String) async throws -> Summary {
+    static func summary(
+        of transcript: String, agenda: String, prepNotes: String, participants: [String]
+    ) async throws -> Summary {
         var text = transcript
         while text.count > partLength {
             var notes: [String] = []
@@ -81,6 +83,10 @@ enum MeetingAssistant {
             speaker names as given ("Me" is the person who will read the notes). Do not add facts.
             """)
         var prompt = ""
+        if !participants.isEmpty {
+            prompt += "Participants (spell names like this; the transcript numbers speakers): "
+            prompt += participants.joined(separator: ", ") + "\n\n"
+        }
         if !agenda.isEmpty { prompt += "Agenda:\n\(agenda.prefix(1_000))\n\n" }
         if !prepNotes.isEmpty { prompt += "Background:\n\(prepNotes.prefix(1_000))\n\n" }
         prompt += "Meeting:\n\(text)"

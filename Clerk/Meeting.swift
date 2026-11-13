@@ -170,7 +170,7 @@ final class Meeting {
             await live.finish()
             var notes = MeetingNotes(
                 startedAt: startedAt, duration: duration, agenda: prep.agenda, prepNotes: prep.notes,
-                talkingPoints: talkingPoints, lines: []
+                participants: prep.participantList, talkingPoints: talkingPoints, lines: []
             )
             let others = chunks.filter { !$0.isMe }
             var segments: [FinalTranscript.SpeakerSegment] = []
@@ -189,7 +189,8 @@ final class Meeting {
             } else {
                 do {
                     notes.summary = try await MeetingAssistant.summary(
-                        of: notes.transcriptText, agenda: notes.agenda, prepNotes: notes.prepNotes)
+                        of: notes.transcriptText, agenda: notes.agenda, prepNotes: notes.prepNotes,
+                        participants: notes.participants)
                 } catch {
                     notes.summaryProblem = error.localizedDescription
                 }
@@ -217,7 +218,7 @@ final class Meeting {
             NSWorkspace.shared.open(url)
             return
         }
-        namesWindow.show(speakers: speakers) { names in
+        namesWindow.show(speakers: speakers, participants: notes.participants) { names in
             if !names.isEmpty, let markdown = try? String(contentsOf: url, encoding: .utf8) {
                 try? MeetingNotes.renaming(markdown, names: names).write(to: url, atomically: true, encoding: .utf8)
             }

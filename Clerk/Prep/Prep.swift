@@ -7,11 +7,13 @@ final class Prep {
     var notes = "" { didSet { save() } }
     var agenda = "" { didSet { save() } }
     var talkingPoints = "" { didSet { save() } }
+    var participants = "" { didSet { save() } }
 
     @ObservationIgnored private let url: URL?
 
     private struct Saved: Codable {
         var notes, agenda, talkingPoints: String
+        var participants: String?
     }
 
     /// `url` nil keeps the prep in memory only (for tests).
@@ -23,9 +25,11 @@ final class Prep {
         notes = saved.notes
         agenda = saved.agenda
         talkingPoints = saved.talkingPoints
+        participants = saved.participants ?? ""
     }
 
     var talkingPointList: [String] { Self.lines(of: talkingPoints) }
+    var participantList: [String] { Self.lines(of: participants) }
 
     /// One item per line. List markers (`-`, `*`, `•`, `1.`, `1)`, `[ ]`) and empty lines are removed.
     nonisolated static func lines(of text: String) -> [String] {
@@ -40,7 +44,7 @@ final class Prep {
 
     private func save() {
         guard let url else { return }
-        let saved = Saved(notes: notes, agenda: agenda, talkingPoints: talkingPoints)
+        let saved = Saved(notes: notes, agenda: agenda, talkingPoints: talkingPoints, participants: participants)
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? JSONEncoder().encode(saved).write(to: url, options: .atomic)
     }

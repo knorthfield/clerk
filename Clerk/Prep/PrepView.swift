@@ -6,7 +6,11 @@ struct PrepView: View {
 
     var body: some View {
         HSplitView {
-            PrepBox(title: "Prep notes", prompt: "Background, people, numbers to remember…", text: $prep.notes)
+            VStack(spacing: 0) {
+                PrepBox(title: "Prep notes", prompt: "Background, numbers to remember…", text: $prep.notes)
+                PrepBox(title: "Participants", prompt: "One name per line. After the meeting, you pick who each speaker was.",
+                        text: $prep.participants)
+            }
             VStack(spacing: 0) {
                 PrepBox(title: "Agenda", prompt: "One item per line", text: $prep.agenda)
                 PrepBox(title: "Talking points", prompt: "One point per line. Clerk ticks them off as you cover them.",

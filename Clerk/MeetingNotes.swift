@@ -6,6 +6,7 @@ struct MeetingNotes {
     var duration: TimeInterval
     var agenda: String
     var prepNotes: String
+    var participants: [String] = []
     var talkingPoints: [TalkingPoint]
     var lines: [Line]
     var summary: MeetingAssistant.Summary?
