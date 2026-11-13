@@ -7,7 +7,7 @@ struct ClerkApp: App {
 
     var body: some Scene {
         Settings {
-            SettingsView()
+            SettingsView(meeting: appDelegate.meeting)
         }
     }
 }
