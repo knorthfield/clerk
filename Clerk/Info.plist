@@ -22,8 +22,6 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
-	<key>LSUIElement</key>
-	<true/>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Clerk records the other people in your meeting and turns what they say into a transcript.</string>
 	<key>NSMicrophoneUsageDescription</key>

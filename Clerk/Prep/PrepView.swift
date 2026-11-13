@@ -11,7 +11,8 @@ struct PrepView: View {
         TextEditor(text: $prep.text)
             .font(.body.monospaced())
             .scrollContentBackground(.hidden)
-            .contentMargins(16, for: .scrollContent)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
             .background(.background)
             .dropDestination(for: URL.self) { urls, _ in
                 guard let text = urls.first.flatMap({ try? String(contentsOf: $0, encoding: .utf8) }) else { return false }

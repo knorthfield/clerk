@@ -10,7 +10,7 @@ struct MeetingView: View {
             Divider().padding(.vertical, 16)
             CoachHalf(meeting: meeting)
         }
-        .frame(width: MeetingPanel.size.width, height: MeetingPanel.size.height)
+        .frame(width: MainWindow.panelSize.width, height: MainWindow.panelSize.height)
         // Solid enough to read over any window, and still glass at the edge.
         .background(.thickMaterial, in: .rect(cornerRadius: 24))
         .glassEffect(.clear, in: .rect(cornerRadius: 24))

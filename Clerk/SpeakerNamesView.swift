@@ -4,7 +4,7 @@ import SwiftUI
 /// or type a name. A participant you give to one speaker goes off the lists of the others.
 /// The file is already saved; Save puts the names in it.
 struct SpeakerNamesView: View {
-    struct Speaker: Identifiable {
+    struct Speaker: Identifiable, Equatable {
         let label: String
         let firstWords: String
         var id: String { label }
@@ -64,29 +64,5 @@ struct SpeakerNamesView: View {
 
     private func binding(for label: String) -> Binding<String> {
         Binding(get: { names[label, default: ""] }, set: { names[label] = $0 })
-    }
-}
-
-@MainActor
-final class SpeakerNamesWindow {
-    private var window: NSWindow?
-
-    func show(speakers: [SpeakerNamesView.Speaker], participants: [String], onDone: @escaping ([String: String]) -> Void) {
-        window?.close()
-        let view = SpeakerNamesView(speakers: speakers, participants: participants) { [weak self] names in
-            self?.window?.close()
-            self?.window = nil
-            onDone(names)
-        }
-        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
-        window.title = "Meeting Notes"
-        window.styleMask = [.titled]
-        window.isReleasedWhenClosed = false
-        window.center()
-        // A menu bar app is not active when the meeting ends; show the window over the other apps.
-        window.orderFrontRegardless()
-        window.makeKey()
-        NSApp.activate()
-        self.window = window
     }
 }

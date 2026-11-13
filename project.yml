@@ -36,7 +36,6 @@ targets:
         CFBundleDisplayName: Clerk
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Clerk records your side of the meeting and turns it into a transcript.
         NSAudioCaptureUsageDescription: Clerk records the other people in your meeting and turns what they say into a transcript.

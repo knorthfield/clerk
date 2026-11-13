@@ -3,11 +3,20 @@ import os
 import FluidAudio
 import Observation
 
-/// One meeting at a time: idle → recording → processing → idle.
+/// One meeting at a time: prep → recording → processing → naming the speakers → done → prep.
 @MainActor @Observable
 final class Meeting {
-    enum Stage {
-        case idle, recording, processing
+    enum Stage: Equatable {
+        case prep, recording, processing
+        case naming(NamingRequest)
+        case done(URL)
+    }
+
+    /// The saved notes, and the numbered speakers in them.
+    struct NamingRequest: Equatable {
+        let url: URL
+        let speakers: [SpeakerNamesView.Speaker]
+        let participants: [String]
     }
 
     private enum ModelState {
@@ -16,7 +25,7 @@ final class Meeting {
         case failed(String)
     }
 
-    private(set) var stage = Stage.idle
+    private(set) var stage = Stage.prep
     private var modelState = ModelState.loading(0)
     private(set) var startedAt: Date?
     private(set) var lastError: String?
@@ -36,8 +45,6 @@ final class Meeting {
     /// How often the coach checks the transcript, and how much of the transcript it reads.
     private static let coachInterval = Duration.seconds(30)
     private static let coachWindow: TimeInterval = 120
-    @ObservationIgnored private lazy var panel = MeetingPanel(meeting: self)
-    @ObservationIgnored private let namesWindow = SpeakerNamesWindow()
 
     init(prep: Prep) {
         self.prep = prep
@@ -45,18 +52,17 @@ final class Meeting {
 
     var isRecording: Bool { stage == .recording }
 
-    var status: String {
-        switch (stage, modelState) {
-        case (.recording, _): "Recording"
-        case (.processing, _): "Writing the meeting notes…"
-        case (.idle, .loading(let fraction)): "Getting the speech model ready… \(Int(fraction * 100)) %"
-        case (.idle, .failed(let message)): "The speech model did not load: \(message)"
-        case (.idle, .ready): "Ready"
+    /// While the speech model is not ready, what it does.
+    var modelStatus: String? {
+        switch modelState {
+        case .loading(let fraction): "Getting the speech model ready… \(Int(fraction * 100)) %"
+        case .failed(let message): "The speech model did not load: \(message)"
+        case .ready: nil
         }
     }
 
     var canStart: Bool {
-        if stage == .idle, case .ready = modelState { true } else { false }
+        if stage == .prep, case .ready = modelState { true } else { false }
     }
 
     var modelFailed: Bool {
@@ -85,7 +91,7 @@ final class Meeting {
     }
 
     func start() {
-        guard stage == .idle, case .ready(let models) = modelState else { return }
+        guard stage == .prep, case .ready(let models) = modelState else { return }
         Task {
             // Ask first: if the system prompt shows while the audio engine starts, the app stops responding.
             await Permissions.requestMicrophone()
@@ -98,7 +104,7 @@ final class Meeting {
     }
 
     private func start(models: AsrModels) {
-        guard stage == .idle else { return }
+        guard stage == .prep else { return }
         let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
         let live = LiveTranscriber(models: models) { [weak self] chunk in
             Task { @MainActor in self?.chunks.append(chunk) }
@@ -144,7 +150,6 @@ final class Meeting {
         talkingPoints = prep.talkingPointList.enumerated().map { TalkingPoint(id: $0.offset, text: $0.element) }
         startedAt = .now
         stage = .recording
-        panel.show()
         if MeetingAssistant.isAvailable { coach = Task { await runCoach() } }
     }
 
@@ -176,7 +181,6 @@ final class Meeting {
         systemAudio.stop()
         micLevel = 0
         othersLevel = 0
-        panel.hide()
         coach?.cancel()
         coach = nil
         stage = .processing
@@ -215,7 +219,6 @@ final class Meeting {
                 }
             }
             save(notes)
-            stage = .idle
         }
     }
 
@@ -228,21 +231,33 @@ final class Meeting {
             try notes.markdown.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             lastError = "The notes were not saved: \(error.localizedDescription)"
+            stage = .prep
             return
         }
         let speakers = notes.speakers.filter { $0 != FinalTranscript.me }.map { label in
             SpeakerNamesView.Speaker(label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "")
         }
-        guard !speakers.isEmpty else {
-            NSWorkspace.shared.open(url)
-            return
+        stage = speakers.isEmpty
+            ? .done(url)
+            : .naming(NamingRequest(url: url, speakers: speakers, participants: notes.participants))
+    }
+
+    /// Puts the names in the file. No names keeps the numbers.
+    func finishNaming(_ names: [String: String]) {
+        guard case .naming(let request) = stage else { return }
+        if !names.isEmpty, let markdown = try? String(contentsOf: request.url, encoding: .utf8) {
+            try? MeetingNotes.renaming(markdown, names: names).write(to: request.url, atomically: true, encoding: .utf8)
         }
-        namesWindow.show(speakers: speakers, participants: notes.participants) { names in
-            if !names.isEmpty, let markdown = try? String(contentsOf: url, encoding: .utf8) {
-                try? MeetingNotes.renaming(markdown, names: names).write(to: url, atomically: true, encoding: .utf8)
-            }
-            NSWorkspace.shared.open(url)
-        }
+        stage = .done(request.url)
+    }
+
+    /// Back to the prep, which still has the last meeting's text.
+    func newMeeting() {
+        chunks = []
+        talkingPoints = []
+        startedAt = nil
+        lastError = nil
+        stage = .prep
     }
 
     func toggle(_ point: TalkingPoint) {
