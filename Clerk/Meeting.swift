@@ -9,7 +9,8 @@ final class Meeting {
     private(set) var lastError: String?
 
     @ObservationIgnored private let mic = MicRecorder()
-    @ObservationIgnored private var micTrack: TrackWriter?
+    @ObservationIgnored private let systemAudio = SystemAudioTap()
+    @ObservationIgnored private var tracks: [TrackWriter] = []
 
     static var storageFolder: URL {
         URL.applicationSupportDirectory.appending(path: "Clerk", directoryHint: .isDirectory)
@@ -22,8 +23,15 @@ final class Meeting {
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let micTrack = try TrackWriter(url: folder.appending(path: "me.caf"))
+            let othersTrack = try TrackWriter(url: folder.appending(path: "others.caf"))
             try mic.start { samples in micTrack.append(samples) }
-            self.micTrack = micTrack
+            do {
+                try systemAudio.start { samples in othersTrack.append(samples) }
+            } catch {
+                mic.stop()
+                throw error
+            }
+            tracks = [micTrack, othersTrack]
         } catch {
             lastError = error.localizedDescription
             return
@@ -36,7 +44,8 @@ final class Meeting {
     func stop() {
         guard isRecording else { return }
         mic.stop()
-        micTrack = nil
+        systemAudio.stop()
+        tracks = []
         isRecording = false
     }
 
