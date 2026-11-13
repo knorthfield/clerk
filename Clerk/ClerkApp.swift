@@ -7,13 +7,15 @@ struct ClerkApp: App {
 
     var body: some Scene {
         MenuBarExtra("Clerk", systemImage: "person.2.wave.2") {
-            MenuContent()
+            MenuContent(meeting: appDelegate.meeting)
         }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let meeting = Meeting()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The unit tests run inside the app: do not add a login item or show a window.
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
@@ -22,9 +24,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 private struct MenuContent: View {
+    let meeting: Meeting
     @State private var opensAtLogin = LoginItem.isEnabled
 
     var body: some View {
+        if meeting.isRecording {
+            Button("Stop Meeting") { meeting.stop() }
+        } else {
+            Button("Start Meeting") { meeting.start() }
+        }
+        if let lastError = meeting.lastError {
+            Text(lastError)
+        }
+        if !Permissions.hasMicrophone {
+            Button("Allow Microphone…") { Task { await Permissions.requestMicrophone() } }
+        }
+        Divider()
         Toggle("Open at Login", isOn: $opensAtLogin)
             .onChange(of: opensAtLogin) { _, isOn in LoginItem.set(isOn) }
         Button("Quit Clerk") { NSApp.terminate(nil) }
