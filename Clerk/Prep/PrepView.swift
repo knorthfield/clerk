@@ -18,6 +18,36 @@ struct PrepView: View {
             }
         }
         .frame(minWidth: 640, minHeight: 420)
+        .toolbar {
+            Menu("Template", systemImage: "doc.on.clipboard") {
+                Button("Copy Blank Template") { copy(PrepTemplate.blank) }
+                Button("Copy Template with AI Prompt") { copy(PrepTemplate.aiPrompt) }
+                Button("Paste Filled Template") { pasteTemplate() }
+                Divider()
+                Button("Clear All") { prep.clear() }
+            }
+        }
+        .alert("The clipboard has no filled template", isPresented: $isPasteFailed) {
+        } message: {
+            Text("Copy the filled template, with its headings (## Participants, ## Agenda, ## Talking points, ## Prep notes), then try again.")
+        }
+        // A filled template dropped on the window (not on a box) fills all the boxes.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let text = urls.first.flatMap({ try? String(contentsOf: $0, encoding: .utf8) }) else { return false }
+            return prep.fill(fromTemplate: text)
+        }
+    }
+
+    @State private var isPasteFailed = false
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func pasteTemplate() {
+        let text = NSPasteboard.general.string(forType: .string) ?? ""
+        isPasteFailed = !prep.fill(fromTemplate: text)
     }
 }
 

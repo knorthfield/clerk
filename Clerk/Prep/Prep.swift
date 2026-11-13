@@ -28,6 +28,20 @@ final class Prep {
         participants = saved.participants ?? ""
     }
 
+    /// Puts each section of a filled template into its box. False if the text is not a template.
+    func fill(fromTemplate markdown: String) -> Bool {
+        guard let sections = PrepTemplate.sections(of: markdown) else { return false }
+        participants = sections.participants
+        agenda = sections.agenda
+        talkingPoints = sections.talkingPoints
+        notes = sections.notes
+        return true
+    }
+
+    func clear() {
+        _ = fill(fromTemplate: "## Agenda")
+    }
+
     var talkingPointList: [String] { Self.lines(of: talkingPoints) }
     var participantList: [String] { Self.lines(of: participants) }
 
