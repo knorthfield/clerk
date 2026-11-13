@@ -17,8 +17,8 @@ struct ClerkApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    let meeting = Meeting()
     let prep = Prep()
+    lazy var meeting = Meeting(prep: prep)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The unit tests run inside the app: do not add a login item or show a window.
