@@ -9,12 +9,16 @@ struct ClerkApp: App {
         MenuBarExtra("Clerk", systemImage: "person.2.wave.2") {
             MenuContent(meeting: appDelegate.meeting)
         }
+        Window("Meeting Prep", id: "prep") {
+            PrepView(prep: appDelegate.prep)
+        }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let meeting = Meeting()
+    let prep = Prep()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The unit tests run inside the app: do not add a login item or show a window.
@@ -26,12 +30,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private struct MenuContent: View {
     let meeting: Meeting
     @State private var opensAtLogin = LoginItem.isEnabled
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if meeting.isRecording {
             Button("Stop Meeting") { meeting.stop() }
         } else {
             Button("Start Meeting") { meeting.start() }
+        }
+        Button("Meeting Prep…") {
+            openWindow(id: "prep")
+            NSApp.activate()
         }
         if let lastError = meeting.lastError {
             Text(lastError)
