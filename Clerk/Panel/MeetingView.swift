@@ -11,7 +11,9 @@ struct MeetingView: View {
             CoachHalf(meeting: meeting)
         }
         .frame(width: MeetingPanel.size.width, height: MeetingPanel.size.height)
-        .glassEffect(in: .rect(cornerRadius: 24))
+        // Solid enough to read over any window, and still glass at the edge.
+        .background(.thickMaterial, in: .rect(cornerRadius: 24))
+        .glassEffect(.clear, in: .rect(cornerRadius: 24))
     }
 }
 
@@ -26,9 +28,13 @@ private struct NotesHalf: View {
                     Text(startedAt, style: .timer).monospacedDigit()
                 }
                 Spacer()
-                Button("Stop") { meeting.stop() }
-                    .buttonStyle(.glass)
-                    .controlSize(.small)
+                // A borderless panel never becomes active, so system buttons look disabled. Draw it ourselves.
+                Button { meeting.stop() } label: {
+                    Text("Stop").font(.callout.weight(.semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 4)
+                        .background(.red, in: .capsule)
+                }
+                .buttonStyle(.plain)
             }
             .font(.headline)
             HStack(spacing: 16) {

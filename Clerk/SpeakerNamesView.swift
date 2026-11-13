@@ -83,7 +83,9 @@ final class SpeakerNamesWindow {
         window.styleMask = [.titled]
         window.isReleasedWhenClosed = false
         window.center()
-        window.makeKeyAndOrderFront(nil)
+        // A menu bar app is not active when the meeting ends; show the window over the other apps.
+        window.orderFrontRegardless()
+        window.makeKey()
         NSApp.activate()
         self.window = window
     }

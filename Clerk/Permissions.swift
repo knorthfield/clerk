@@ -6,11 +6,12 @@ enum Permissions {
         AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 
+    /// Shows the system prompt the first time. If you said no before, opens System Settings.
     static func requestMicrophone() async {
-        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
-            _ = await AVCaptureDevice.requestAccess(for: .audio)
-        } else {
-            openSettings("Privacy_Microphone")
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .notDetermined: _ = await AVCaptureDevice.requestAccess(for: .audio)
+        case .authorized: break
+        default: openSettings("Privacy_Microphone")
         }
     }
 

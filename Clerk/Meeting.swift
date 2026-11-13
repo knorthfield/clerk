@@ -1,4 +1,5 @@
 import AppKit
+import os
 import FluidAudio
 import Observation
 
@@ -85,18 +86,34 @@ final class Meeting {
 
     func start() {
         guard stage == .idle, case .ready(let models) = modelState else { return }
-        let now = Date.now
-        let folder = Self.storageFolder.appending(path: Self.folderName(for: now), directoryHint: .isDirectory)
+        Task {
+            // Ask first: if the system prompt shows while the audio engine starts, the app stops responding.
+            await Permissions.requestMicrophone()
+            guard Permissions.hasMicrophone else {
+                lastError = "Clerk needs the microphone. Allow it in System Settings › Privacy & Security."
+                return
+            }
+            start(models: models)
+        }
+    }
+
+    private func start(models: AsrModels) {
+        guard stage == .idle else { return }
+        let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
         let live = LiveTranscriber(models: models) { [weak self] chunk in
             Task { @MainActor in self?.chunks.append(chunk) }
         } onError: { [weak self] error in
             Task { @MainActor in self?.lastError = error.localizedDescription }
         }
+        // The two sources start at different times (the first time, macOS asks for permission between
+        // them). Keep the audio of both only from the moment both run, so the two tracks have one clock.
+        let gate = Gate()
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let micTrack = try TrackWriter(url: folder.appending(path: "me.caf"))
             let othersTrack = try TrackWriter(url: folder.appending(path: "others.caf"))
             try mic.start { [weak self] samples in
+                guard gate.isOpen else { return }
                 micTrack.append(samples)
                 live.feed(samples, isMe: true)
                 let level = level(of: samples)
@@ -104,6 +121,7 @@ final class Meeting {
             }
             do {
                 try systemAudio.start { [weak self] samples in
+                    guard gate.isOpen else { return }
                     othersTrack.append(samples)
                     live.feed(samples, isMe: false)
                     let level = level(of: samples)
@@ -119,11 +137,12 @@ final class Meeting {
             Task { await live.finish() }
             return
         }
+        gate.open()
         self.live = live
         lastError = nil
         chunks = []
         talkingPoints = prep.talkingPointList.enumerated().map { TalkingPoint(id: $0.offset, text: $0.element) }
-        startedAt = now
+        startedAt = .now
         stage = .recording
         panel.show()
         if MeetingAssistant.isAvailable { coach = Task { await runCoach() } }
@@ -234,4 +253,13 @@ final class Meeting {
     static func folderName(for date: Date) -> String {
         date.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).timeSeparator(.omitted))
     }
+}
+
+/// Closed until both audio sources run.
+private final class Gate: Sendable {
+    private let state = OSAllocatedUnfairLock(initialState: false)
+
+    var isOpen: Bool { state.withLock { $0 } }
+
+    func open() { state.withLock { $0 = true } }
 }
