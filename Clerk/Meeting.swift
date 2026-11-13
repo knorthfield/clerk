@@ -30,6 +30,11 @@ final class Meeting {
     @ObservationIgnored private let systemAudio = SystemAudioTap()
     @ObservationIgnored private var tracks: [TrackWriter] = []
     @ObservationIgnored private var live: LiveTranscriber?
+    @ObservationIgnored private var coach: Task<Void, Never>?
+
+    /// How often the coach checks the transcript, and how much of the transcript it reads.
+    private static let coachInterval = Duration.seconds(30)
+    private static let coachWindow: TimeInterval = 120
     @ObservationIgnored private lazy var panel = MeetingPanel(meeting: self)
 
     init(prep: Prep) {
@@ -120,6 +125,29 @@ final class Meeting {
         startedAt = now
         stage = .recording
         panel.show()
+        if MeetingAssistant.isAvailable { coach = Task { await runCoach() } }
+    }
+
+    /// Every 30 s, if there is new text, asks the model which open points the last 2 minutes covered.
+    /// It only ticks points. You untick a point by hand if the model is wrong.
+    private func runCoach() async {
+        var checkedChunkCount = 0
+        while !Task.isCancelled {
+            try? await Task.sleep(for: Self.coachInterval)
+            let open = talkingPoints.filter { !$0.isCovered }
+            guard chunks.count > checkedChunkCount, !open.isEmpty, let last = chunks.last else { continue }
+            checkedChunkCount = chunks.count
+            let recent = chunks.filter { $0.start >= last.start - Self.coachWindow }
+            do {
+                let covered = try await MeetingAssistant.coveredPoints(in: MeetingAssistant.text(of: recent), of: open)
+                for id in covered {
+                    if let index = talkingPoints.firstIndex(where: { $0.id == id }) { talkingPoints[index].isCovered = true }
+                }
+            } catch {
+                // The coach is a help, not the record: try again at the next check.
+                continue
+            }
+        }
     }
 
     func stop() {
@@ -130,6 +158,8 @@ final class Meeting {
         micLevel = 0
         othersLevel = 0
         panel.hide()
+        coach?.cancel()
+        coach = nil
         stage = .processing
         self.live = nil
         Task {
