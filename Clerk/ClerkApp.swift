@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let prep = Prep()
     lazy var meeting = Meeting(prep: prep)
     private var window: MainWindow?
+    private lazy var updateRelauncher = UpdateRelauncher(isBusy: { [meeting] in meeting.isRecording })
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The unit tests run inside the app: do not load the model or show the window.
@@ -27,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.show()
         self.window = window
         meeting.loadModel()
+        updateRelauncher.start()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
