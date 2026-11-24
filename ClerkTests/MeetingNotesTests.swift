@@ -15,14 +15,24 @@ private func notes() -> MeetingNotes {
             Line(speaker: "Speaker 1", start: 3, text: "Hello all."),
             Line(speaker: "Me", start: 3725, text: "Morning."),
         ],
-        summary: .init(summary: "We agreed the budget.", decisions: ["Cut travel"],
+        summary: .init(summary: "We agreed the budget.", title: "“Q3 budget / forecast.”", decisions: ["Cut travel"],
                        actionItems: [.init(owner: "Speaker 1", task: "Send the job descriptions by Friday")])
     )
 }
 
-@Test func folderNameHasTheDateAndASafeTitle() {
-    let notes = notes()
-    #expect(MeetingNotes.folderName(startedAt: notes.startedAt, agenda: notes.agenda) == "2026-11-13 1405 Q3 budget - forecast")
+@Test func folderIsTheDateThenGetsTheSummarysTitle() {
+    var notes = notes()
+    #expect(MeetingNotes.folderName(startedAt: notes.startedAt) == "2026-11-13 1405")
+    #expect(notes.titledFolderName == "2026-11-13 1405 Q3 budget - forecast")
+    notes.summary = nil
+    #expect(notes.titledFolderName == nil)
+    #expect(notes.title == "Meeting")
+}
+
+@Test func titleIsOneShortLineWithoutQuotesOrPeriod() {
+    #expect(MeetingNotes.cleanTitle(" \"Launch plan.\"\nSecond line") == "Launch plan")
+    #expect(MeetingNotes.cleanTitle(String(repeating: "word ", count: 20))?.count ?? 0 <= 60)
+    #expect(MeetingNotes.cleanTitle("“ ”") == nil)
 }
 
 @Test func summaryHasItsSections() {

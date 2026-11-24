@@ -8,6 +8,8 @@ enum MeetingAssistant {
     struct Summary {
         @Guide(description: "A summary of the meeting in one to three short paragraphs.")
         var summary: String
+        @Guide(description: "A short title for the meeting, two to six words, from what it was about. No date.")
+        var title: String
         @Guide(description: "The decisions that the meeting made. Empty if none.")
         var decisions: [String]
         @Guide(description: "The tasks that a person agreed to do. Empty if none.")

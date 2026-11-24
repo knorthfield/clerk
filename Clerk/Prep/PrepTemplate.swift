@@ -11,7 +11,7 @@ enum PrepTemplate {
         -
 
         ## Agenda
-        <!-- One item per line, in order. The first item is the title of the meeting notes. -->
+        <!-- One item per line, in order. -->
         -
 
         ## Talking points

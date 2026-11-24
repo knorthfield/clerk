@@ -13,18 +13,38 @@ struct MeetingNotes {
     /// Why there is no summary, if there is none.
     var summaryProblem: String?
 
-    var title: String { Prep.lines(of: agenda).first ?? "Meeting" }
+    /// The title that Apple Intelligence wrote with the summary, else "Meeting".
+    var title: String { summary.flatMap { Self.cleanTitle($0.title) } ?? "Meeting" }
 
     var speakers: [String] {
         var seen: Set<String> = []
         return lines.map(\.speaker).filter { seen.insert($0).inserted }
     }
 
-    /// The meeting's folder in the output folder: "2026-11-13 1405 Q3 budget".
-    static func folderName(startedAt: Date, agenda: String) -> String {
+    /// The meeting's folder in the output folder: the date and time ("2026-11-13 1405") while it records,
+    /// then with the title from the summary ("2026-11-13 1405 Q3 budget review"). Like Daisy's
+    /// `MeetingTitle`: the app's own name first, the model's title when there is one.
+    static func folderName(startedAt: Date, title: String? = nil) -> String {
         let date = startedAt.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased))\(minute: .twoDigits)", timeZone: .current, calendar: .current))
-        let title = Prep.lines(of: agenda).first ?? "Meeting"
-        return "\(date) \(title.replacing(/[\/:\\]/, with: "-").prefix(60))"
+        guard let title else { return date }
+        return "\(date) \(title.replacing(/[\/:\\]/, with: "-"))"
+    }
+
+    /// The folder name with the summary's title, or nil without one.
+    var titledFolderName: String? {
+        summary.flatMap { Self.cleanTitle($0.title) }.map { Self.folderName(startedAt: startedAt, title: $0) }
+    }
+
+    /// The model's title made fit for a heading and a folder name: one line, no wrapping quotes, no
+    /// closing period, at most 60 characters (cut at a word). Nil when nothing is left.
+    static func cleanTitle(_ text: String) -> String? {
+        var title = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        title = title.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\"'“”‘’«».")))
+        if title.count > 60 {
+            let cut = title.prefix(60)
+            title = String(cut.lastIndex(of: " ").map { cut[..<$0] } ?? cut)
+        }
+        return title.isEmpty ? nil : title
     }
 
     static let summaryFile = "summary.md"

@@ -17,8 +17,9 @@ meeting app.
   see the panel when you share your screen.
 - **Get the notes.** Clerk only records during the meeting. When you stop, the window comes back,
   Clerk transcribes the recording (about a minute for an hour), and you pick who each speaker was
-  from your participants. Each meeting gets its own folder in your notes folder, for example
-  `2026-11-24 1000 Product launch/`:
+  from your participants. Each meeting gets its own folder in your notes folder, named with the
+  date and time it started, then the title that Apple Intelligence gives it with the summary, for
+  example `2026-11-24 1000 Product launch/`:
   - `summary.md`: summary, decisions, action items and talking points
   - `transcript.md`: the transcript with a speaker and the time of day for each turn, with front
     matter (date, time, duration, attendees)

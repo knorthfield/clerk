@@ -107,8 +107,7 @@ final class Meeting {
     private func startRecording() {
         guard stage == .prep else { return }
         let now = Date.now
-        let folder = Self.newFolder(
-            named: MeetingNotes.folderName(startedAt: now, agenda: prep.sections.agenda), in: OutputFolder.url)
+        let folder = Self.newFolder(named: MeetingNotes.folderName(startedAt: now), in: OutputFolder.url)
         // The two sources start at different times (the first time, macOS asks for permission between
         // them). Keep the audio of both only from the moment both run, so the two tracks have one clock.
         let gate = Gate()
@@ -205,7 +204,7 @@ final class Meeting {
                     lastError = "The recording \(url.lastPathComponent) was not compressed: \(error.localizedDescription)"
                 }
             }
-            save(notes, in: folder, suggestedNames: suggestedNames)
+            save(notes, in: Self.renamed(folder, to: notes.titledFolderName), suggestedNames: suggestedNames)
         }
     }
 
@@ -240,6 +239,13 @@ final class Meeting {
             }
         }
         stage = .done(request.url)
+    }
+
+    /// The folder with the summary's title in its name. The same folder if there is no title or the move fails.
+    private static func renamed(_ folder: URL, to name: String?) -> URL {
+        guard let name else { return folder }
+        let target = newFolder(named: name, in: folder.deletingLastPathComponent())
+        return (try? FileManager.default.moveItem(at: folder, to: target)) == nil ? folder : target
     }
 
     /// A folder that does not exist yet: "name", else "name 2", "name 3"…
