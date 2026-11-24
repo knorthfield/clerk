@@ -1,3 +1,4 @@
+import AVKit
 import SwiftUI
 
 /// The finished meeting notes, formatted. The file is the record; this reads it.
@@ -5,13 +6,20 @@ struct NotesView: View {
     let url: URL
     let newMeeting: () -> Void
     @State private var blocks: [NoteBlock] = []
+    /// The video of the meeting window, if there is one next to the notes.
+    @State private var player: AVPlayer?
 
     var body: some View {
         VStack(spacing: 0) {
+            if let player {
+                PlayerView(player: player)
+                    .frame(minHeight: 200, idealHeight: 300, maxHeight: 360)
+                Divider()
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     ForEach(blocks.indices, id: \.self) { index in
-                        BlockView(block: blocks[index])
+                        BlockView(block: blocks[index], seek: player.map { player in { player.seek(to: $0) } })
                     }
                 }
                 .frame(maxWidth: 720, alignment: .leading)
@@ -33,12 +41,31 @@ struct NotesView: View {
         }
         .task(id: url) {
             blocks = NoteBlock.blocks(of: (try? String(contentsOf: url, encoding: .utf8)) ?? "")
+            let videoURL = url.deletingPathExtension().appendingPathExtension("mp4")
+            player = FileManager.default.fileExists(atPath: videoURL.path(percentEncoded: false)) ? AVPlayer(url: videoURL) : nil
         }
+    }
+}
+
+/// AppKit's player. SwiftUI's `VideoPlayer` crashes on macOS 27.2 (in `_AVKit_SwiftUI`).
+private struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.player = player
+        return view
+    }
+
+    func updateNSView(_ view: AVPlayerView, context: Context) {
+        view.player = player
     }
 }
 
 private struct BlockView: View {
     let block: NoteBlock
+    /// Goes to a time in the video. Nil without a video.
+    let seek: ((CMTime) -> Void)?
 
     var body: some View {
         switch block {
@@ -55,6 +82,18 @@ private struct BlockView: View {
             Label { Text(inline(text)) } icon: { Text("•") }
         case .paragraph(let text):
             Text(inline(text))
+        case .line(let speaker, let time, let text):
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let seek {
+                    Button(MeetingNotes.time(time)) { seek(CMTime(seconds: time, preferredTimescale: 600)) }
+                        .buttonStyle(.link)
+                        .monospacedDigit()
+                        .help("Play the video from here")
+                } else {
+                    Text(MeetingNotes.time(time)).monospacedDigit().foregroundStyle(.secondary)
+                }
+                Text(inline("**\(speaker)**: \(text)"))
+            }
         }
     }
 
@@ -71,12 +110,17 @@ enum NoteBlock: Equatable {
     case task(isDone: Bool, text: String)
     case bullet(String)
     case paragraph(String)
+    /// A turn in the transcript: `**Speaker** [hh:mm:ss]: text`.
+    case line(speaker: String, time: TimeInterval, text: String)
 
     static func blocks(of markdown: String) -> [NoteBlock] {
         var blocks: [NoteBlock] = []
         var paragraph: [String] = []
         func endParagraph() {
-            if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: "\n"))) }
+            if !paragraph.isEmpty {
+                let text = paragraph.joined(separator: "\n")
+                blocks.append(transcriptLine(text) ?? .paragraph(text))
+            }
             paragraph = []
         }
         for line in markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
@@ -98,5 +142,12 @@ enum NoteBlock: Equatable {
         }
         endParagraph()
         return blocks
+    }
+
+    private static func transcriptLine(_ text: String) -> NoteBlock? {
+        guard let match = text.wholeMatch(of: /\*\*(.+?)\*\* \[(\d+):(\d\d):(\d\d)\]: ((?s).*)/),
+              let hours = Int(match.2), let minutes = Int(match.3), let seconds = Int(match.4)
+        else { return nil }
+        return .line(speaker: String(match.1), time: TimeInterval(hours * 3600 + minutes * 60 + seconds), text: String(match.5))
     }
 }
