@@ -44,6 +44,13 @@ private func notes() -> MeetingNotes {
     #expect(!notes.markdown.contains("## Action items"))
 }
 
+@Test func markdownLinksTheVideo() {
+    var notes = notes()
+    #expect(!notes.markdown.contains("[Video]"))
+    notes.videoFileName = notes.baseName + ".mp4"
+    #expect(notes.markdown.contains("42 min · Speaker 1, Me\n\n[Video](<2026-11-13 1405 Q3 budget - forecast.mp4>)\n\n## Summary"))
+}
+
 @Test func renamingReplacesOnlyTheWholeLabel() {
     let markdown = "**Speaker 1** said hi to Speaker 10. Speaker 1 will call."
     let renamed = MeetingNotes.renaming(markdown, names: ["Speaker 1": " Sarah ", "Speaker 10": ""])

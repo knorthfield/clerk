@@ -12,6 +12,8 @@ struct MeetingNotes {
     var summary: MeetingAssistant.Summary?
     /// Why there is no summary, if there is none.
     var summaryProblem: String?
+    /// The video of the meeting window, next to the notes.
+    var videoFileName: String?
 
     var title: String { Prep.lines(of: agenda).first ?? "Meeting" }
 
@@ -20,10 +22,13 @@ struct MeetingNotes {
         return lines.map(\.speaker).filter { seen.insert($0).inserted }
     }
 
-    var fileName: String {
+    var fileName: String { baseName + ".md" }
+
+    /// The file name without its extension: the notes and the video have the same one.
+    var baseName: String {
         let date = startedAt.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased))\(minute: .twoDigits)", timeZone: .current, calendar: .current))
         let safeTitle = title.replacing(/[\/:\\]/, with: "-").prefix(60)
-        return "\(date) \(safeTitle).md"
+        return "\(date) \(safeTitle)"
     }
 
     var markdown: String {
@@ -31,6 +36,7 @@ struct MeetingNotes {
         let date = startedAt.formatted(.dateTime.day().month(.abbreviated).year().hour().minute())
         out.append("# \(title)")
         out.append("\(date) · \(Int((duration / 60).rounded())) min" + (speakers.isEmpty ? "" : " · \(speakers.joined(separator: ", "))"))
+        if let videoFileName { out.append("[Video](<\(videoFileName)>)") }
 
         out.append("## Summary")
         out.append(summary?.summary ?? "_Summary not available: \(summaryProblem ?? "no speech was recorded")._")

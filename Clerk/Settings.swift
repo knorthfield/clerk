@@ -13,10 +13,17 @@ enum OutputFolder {
     }
 }
 
+enum VideoRecording {
+    static let key = "recordsVideo"
+
+    static var isOn: Bool { UserDefaults.standard.bool(forKey: key) }
+}
+
 struct SettingsView: View {
     let meeting: Meeting
     @State private var folder = OutputFolder.url
     @State private var isChoosing = false
+    @AppStorage(VideoRecording.key) private var recordsVideo = false
 
     var body: some View {
         Form {
@@ -38,6 +45,15 @@ struct SettingsView: View {
                 Text("Meeting Notes")
             } footer: {
                 Text("One markdown file per meeting, in \(displayPath).")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Record the meeting window", isOn: $recordsVideo)
+            } header: {
+                Text("Video")
+            } footer: {
+                Text("When you start a meeting, pick the window of the meeting app. Clerk saves the video next to the notes, about 100–300 MB for each hour.")
                     .foregroundStyle(.secondary)
             }
 

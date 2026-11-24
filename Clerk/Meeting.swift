@@ -45,6 +45,7 @@ final class Meeting {
     @ObservationIgnored private let systemAudio = SystemAudioTap()
     @ObservationIgnored private var tracks: [TrackWriter] = []
     @ObservationIgnored private var live: LiveTranscriber?
+    @ObservationIgnored private var video: WindowRecorder?
     @ObservationIgnored private var coach: Task<Void, Never>?
 
     /// How often the coach checks the transcript, and how much of the transcript it reads.
@@ -104,13 +105,32 @@ final class Meeting {
                 lastError = "Clerk needs the microphone. Allow it in System Settings › Privacy & Security."
                 return
             }
-            start(models: models)
+            let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
+            var video: WindowRecorder?
+            if VideoRecording.isOn {
+                let recorder = WindowRecorder()
+                guard let filter = await recorder.pickWindow() else { return }
+                do {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    try await recorder.start(filter: filter, url: folder.appending(path: "video.mp4"))
+                } catch {
+                    lastError = "The video did not start: \(error.localizedDescription)"
+                    return
+                }
+                recorder.onFailure = { [weak self] error in
+                    self?.lastError = "The video stopped: \(error.localizedDescription)"
+                }
+                video = recorder
+            }
+            start(models: models, folder: folder, video: video)
         }
     }
 
-    private func start(models: AsrModels) {
-        guard stage == .prep else { return }
-        let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
+    private func start(models: AsrModels, folder: URL, video: WindowRecorder?) {
+        guard stage == .prep else {
+            Task { _ = await video?.stop() }
+            return
+        }
         let live = LiveTranscriber(models: models) { [weak self] chunk in
             Task { @MainActor in self?.chunks.append(chunk) }
         } onError: { [weak self] error in
@@ -145,11 +165,15 @@ final class Meeting {
             tracks = [micTrack, othersTrack]
         } catch {
             lastError = error.localizedDescription
-            Task { await live.finish() }
+            Task {
+                await live.finish()
+                _ = await video?.stop()
+            }
             return
         }
         gate.open()
         self.live = live
+        self.video = video
         lastError = nil
         chunks = []
         participants = prep.participantList
@@ -196,12 +220,27 @@ final class Meeting {
         let duration = Date.now.timeIntervalSince(startedAt)
         let othersURL = tracks.last?.url
         tracks = []
+        let video = video
+        self.video = nil
         Task {
+            let rawVideo = await video?.stop()
             await live.finish()
             var notes = MeetingNotes(
                 startedAt: startedAt, duration: duration, agenda: prep.sections.agenda, prepNotes: prep.sections.notes,
                 participants: prep.participantList, talkingPoints: talkingPoints, lines: []
             )
+            if let rawVideo, let videoStartedAt = video?.startedAt {
+                let url = OutputFolder.url.appending(path: notes.baseName + ".mp4")
+                do {
+                    try FileManager.default.createDirectory(at: OutputFolder.url, withIntermediateDirectories: true)
+                    try await MeetingVideo.align(
+                        rawVideo, from: startedAt.timeIntervalSince(videoStartedAt), to: url)
+                    try? FileManager.default.removeItem(at: rawVideo)
+                    notes.videoFileName = url.lastPathComponent
+                } catch {
+                    lastError = "The video was not saved: \(error.localizedDescription)"
+                }
+            }
             let others = chunks.filter { !$0.isMe }
             var segments: [FinalTranscript.SpeakerSegment] = []
             if !others.isEmpty, let othersURL {
