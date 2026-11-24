@@ -229,6 +229,7 @@ final class Meeting {
                 startedAt: startedAt, duration: duration, agenda: prep.sections.agenda, prepNotes: prep.sections.notes,
                 participants: prep.participantList, talkingPoints: talkingPoints, lines: []
             )
+            var videoURL: URL?
             if let rawVideo, let videoStartedAt = video?.startedAt {
                 let url = OutputFolder.url.appending(path: notes.baseName + ".mp4")
                 do {
@@ -237,6 +238,7 @@ final class Meeting {
                         rawVideo, from: startedAt.timeIntervalSince(videoStartedAt), to: url)
                     try? FileManager.default.removeItem(at: rawVideo)
                     notes.videoFileName = url.lastPathComponent
+                    videoURL = url
                 } catch {
                     lastError = "The video was not saved: \(error.localizedDescription)"
                 }
@@ -252,8 +254,18 @@ final class Meeting {
             }
             let transcript = FinalTranscript.lines(chunks: chunks, otherSpeakers: segments)
             notes.lines = transcript.lines
-            let suggestedNames = FinalTranscript.suggestedNames(
+            var suggestedNames = FinalTranscript.suggestedNames(
                 marks: speakerMarks, segments: segments, labels: transcript.labels)
+            var pictures: [String: NSImage] = [:]
+            if let videoURL, !segments.isEmpty {
+                pictures = await MeetingVideo.pictures(of: videoURL, segments: segments, labels: transcript.labels)
+                if !notes.participants.isEmpty {
+                    let sightings = await MeetingVideo.sightings(of: videoURL, segments: segments, participants: notes.participants)
+                    suggestedNames = FinalTranscript.merged(
+                        taps: suggestedNames,
+                        video: FinalTranscript.suggestedNames(sightings: sightings, segments: segments, labels: transcript.labels))
+                }
+            }
             if notes.lines.isEmpty {
                 notes.summaryProblem = "no speech was recorded"
             } else if !MeetingAssistant.isAvailable {
@@ -267,12 +279,12 @@ final class Meeting {
                     notes.summaryProblem = error.localizedDescription
                 }
             }
-            save(notes, suggestedNames: suggestedNames)
+            save(notes, suggestedNames: suggestedNames, pictures: pictures)
         }
     }
 
     /// Writes the file at once, so it is never lost, then asks for the speakers' names.
-    private func save(_ notes: MeetingNotes, suggestedNames: [String: String]) {
+    private func save(_ notes: MeetingNotes, suggestedNames: [String: String], pictures: [String: NSImage]) {
         let folder = OutputFolder.url
         let url = folder.appending(path: notes.fileName)
         do {
@@ -284,7 +296,8 @@ final class Meeting {
             return
         }
         let speakers = notes.speakers.filter { $0 != FinalTranscript.me }.map { label in
-            SpeakerNamesView.Speaker(label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "")
+            SpeakerNamesView.Speaker(
+                label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "", picture: pictures[label])
         }
         stage = speakers.isEmpty
             ? .done(url)

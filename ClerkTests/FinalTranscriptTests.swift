@@ -79,3 +79,50 @@ private func chunk(_ text: String, isMe: Bool, start: TimeInterval) -> Chunk {
         == ["Speaker 2": "Sarah"])
     #expect(FinalTranscript.suggestedNames(marks: [mark("Sarah", 1)], segments: [], labels: [:]) == [:])
 }
+
+@Test func theVideoSuggestsTheNameThatShowsWhenASpeakerTalks() {
+    let segments: [FinalTranscript.SpeakerSegment] = [
+        .init(speakerID: "x", start: 0, end: 20),
+        .init(speakerID: "y", start: 20, end: 40),
+    ]
+    let labels = ["x": "Speaker 1", "y": "Speaker 2"]
+    func seen(_ time: TimeInterval, _ names: Set<String>) -> FinalTranscript.Sighting { .init(time: time, names: names) }
+
+    // Speaker view: the name of the person who talks.
+    let speakerView = [seen(1, ["Sarah"]), seen(6, ["Sarah"]), seen(11, []), seen(21, ["Daniel"]), seen(26, ["Daniel"])]
+    #expect(FinalTranscript.suggestedNames(sightings: speakerView, segments: segments, labels: labels)
+        == ["Speaker 1": "Sarah", "Speaker 2": "Daniel"])
+    // Gallery: all names all the time, so no names.
+    let gallery = [seen(1, ["Sarah", "Daniel"]), seen(6, ["Sarah", "Daniel"]), seen(21, ["Sarah", "Daniel"])]
+    #expect(FinalTranscript.suggestedNames(sightings: gallery, segments: segments, labels: labels) == [:])
+    // One speaker only, in a gallery: no clear winner.
+    #expect(FinalTranscript.suggestedNames(
+        sightings: [seen(1, ["Sarah", "Daniel"])], segments: Array(segments.prefix(1)), labels: labels) == [:])
+}
+
+@Test func tapNamesWinOverVideoNames() {
+    let merged = FinalTranscript.merged(
+        taps: ["Speaker 1": "Sarah"],
+        video: ["Speaker 1": "Priya", "Speaker 2": "Sarah", "Speaker 3": "Daniel"])
+    #expect(merged == ["Speaker 1": "Sarah", "Speaker 3": "Daniel"])
+}
+
+@Test func aFrameShowsTheParticipantsInItsBiggestText() {
+    let participants = ["Sarah Jones", "Daniel", "Priya"]
+    func line(_ text: String, _ height: Double) -> MeetingVideo.TextLine { .init(text: text, height: height) }
+    // Speaker view: the big name wins over the small tiles.
+    #expect(MeetingVideo.participantsSeen(
+        in: [line("Sarah Jones", 0.04), line("SARAH JONES", 0.012), line("Daniel Smith", 0.012)],
+        participants: participants) == ["Sarah Jones"])
+    // Gallery: names of the same size. A first name matches as a whole word only.
+    #expect(MeetingVideo.participantsSeen(
+        in: [line("Sarah (she/her)", 0.02), line("Daniel Smith", 0.02), line("Priyanka", 0.02)],
+        participants: participants) == ["Sarah Jones", "Daniel"])
+    #expect(MeetingVideo.participantsSeen(in: [line("Mute", 0.02)], participants: participants) == [])
+}
+
+@Test func sampleTimesAreEveryFiveSecondsOfSpeechAndLimited() {
+    let segments: [FinalTranscript.SpeakerSegment] = [.init(speakerID: "x", start: 0, end: 12), .init(speakerID: "y", start: 20, end: 22)]
+    #expect(MeetingVideo.sampleTimes(of: segments) == [1, 6, 11, 21])
+    #expect(MeetingVideo.sampleTimes(of: [.init(speakerID: "x", start: 0, end: 1000)], limit: 10).count == 10)
+}

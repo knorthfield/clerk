@@ -78,11 +78,63 @@ enum FinalTranscript {
             guard let id = speakerID(from: mark.time, to: mark.time + 3, in: segments), let label = labels[id] else { continue }
             votes[label, default: [:]][mark.name, default: 0] += 1
         }
-        let candidates = votes
-            .flatMap { label, names in names.map { (label: label, name: $0.key, count: $0.value) } }
-            .sorted { ($1.count, $0.label, $0.name) < ($0.count, $1.label, $1.name) }
+        return assign(votes.flatMap { label, names in names.map { Candidate(label: label, name: $0.key, score: Double($0.value)) } })
+    }
+
+    /// The participants that a frame of the video shows as the person who talks, and when.
+    struct Sighting: Equatable {
+        let time: TimeInterval
+        let names: Set<String>
+    }
+
+    /// The names to suggest for the labels, from the video. A name that shows in most frames of one
+    /// speaker, and in few frames of the others, is that speaker's. A gallery shows all names all
+    /// the time, so it suggests nothing.
+    static func suggestedNames(sightings: [Sighting], segments: [SpeakerSegment], labels: [String: String]) -> [String: String] {
+        var frames: [String: [Set<String>]] = [:]
+        for sighting in sightings {
+            guard let id = speakerID(from: sighting.time, to: sighting.time, in: segments), let label = labels[id] else { continue }
+            frames[label, default: []].append(sighting.names)
+        }
+        func share(of name: String, in frames: [Set<String>]) -> Double {
+            frames.isEmpty ? 0 : Double(frames.count { $0.contains(name) }) / Double(frames.count)
+        }
+        var candidates: [Candidate] = []
+        for (label, own) in frames {
+            let others = frames.filter { $0.key != label }.values.flatMap { $0 }
+            let scores = Set(own.flatMap { $0 })
+                .map { (name: $0, score: share(of: $0, in: own) - share(of: $0, in: others)) }
+                .sorted { $0.score > $1.score }
+            // Only a clear winner: well above zero, and well above the next name.
+            guard let best = scores.first, best.score >= 0.3,
+                  scores.count < 2 || best.score - scores[1].score >= 0.3
+            else { continue }
+            candidates.append(Candidate(label: label, name: best.name, score: best.score))
+        }
+        return assign(candidates)
+    }
+
+    /// The video's names fill in the labels and names that the taps did not use.
+    static func merged(taps: [String: String], video: [String: String]) -> [String: String] {
+        var names = taps
+        for (label, name) in video.sorted(by: { $0.key < $1.key })
+        where names[label] == nil && !names.values.contains(name) {
+            names[label] = name
+        }
+        return names
+    }
+
+    private struct Candidate {
+        let label: String
+        let name: String
+        let score: Double
+    }
+
+    /// The best scores win, and each name goes to one label only.
+    private static func assign(_ candidates: [Candidate]) -> [String: String] {
         var names: [String: String] = [:]
-        for candidate in candidates where names[candidate.label] == nil && !names.values.contains(candidate.name) {
+        let sorted = candidates.sorted { ($1.score, $0.label, $0.name) < ($0.score, $1.label, $1.name) }
+        for candidate in sorted where names[candidate.label] == nil && !names.values.contains(candidate.name) {
             names[candidate.label] = candidate.name
         }
         return names

@@ -7,6 +7,8 @@ struct SpeakerNamesView: View {
     struct Speaker: Identifiable, Equatable {
         let label: String
         let firstWords: String
+        /// The meeting window while this speaker talks, if Clerk recorded it.
+        var picture: NSImage?
         var id: String { label }
     }
 
@@ -30,9 +32,11 @@ struct SpeakerNamesView: View {
                  : "Pick a participant for each speaker, or type a name. Leave it empty to keep the number.")
                 .foregroundStyle(.secondary)
             if !suggestedNames.isEmpty {
-                Text("The names you tapped during the meeting are filled in. Check them.")
+                Text("The names that you tapped, or that Clerk read in the meeting window, are filled in. Check them.")
                     .foregroundStyle(.secondary)
             }
+            ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
             ForEach(speakers) { speaker in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
@@ -52,9 +56,23 @@ struct SpeakerNamesView: View {
                             .disabled(choices.isEmpty && names[speaker.label, default: ""].isEmpty)
                         }
                     }
-                    Text("“\(speaker.firstWords)”").font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    HStack(alignment: .top) {
+                        if let picture = speaker.picture {
+                            Image(nsImage: picture)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 160)
+                                .clipShape(.rect(cornerRadius: 4))
+                        }
+                        Text("“\(speaker.firstWords)”").font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(speaker.picture == nil ? 2 : 6)
+                    }
                 }
             }
+            }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .fixedSize(horizontal: false, vertical: speakers.allSatisfy { $0.picture == nil })
             HStack {
                 Spacer()
                 Button("Skip") { onDone([:]) }
