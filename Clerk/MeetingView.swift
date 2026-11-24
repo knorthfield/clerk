@@ -138,11 +138,8 @@ private struct CoachHalf: View {
                 }
             }
             if meeting.talkingPoints.isEmpty {
-                Text("Add talking points in Meeting Prep, and Clerk ticks them off as you cover them.")
+                Text("Add talking points in Meeting Prep. Click a point when you cover it.")
                     .font(.callout).foregroundStyle(.secondary)
-            } else if !MeetingAssistant.isAvailable {
-                Text("Turn on Apple Intelligence to tick points automatically. Click a point to tick it.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
@@ -152,7 +149,7 @@ private struct CoachHalf: View {
                 }
                 .animation(.snappy, value: meeting.talkingPoints)
             }
-            .scrollIndicators(.never)
+            .scrollIndicators(.automatic)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

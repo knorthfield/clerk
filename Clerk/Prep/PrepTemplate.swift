@@ -15,7 +15,7 @@ enum PrepTemplate {
         -
 
         ## Talking points
-        <!-- One point per line: what you must raise, ask or agree. Clerk ticks them off as you cover them. -->
+        <!-- One point per line: what you must raise, ask or agree. Click each one in the panel when you cover it. -->
         -
 
         ## Prep notes
