@@ -44,8 +44,10 @@ enum FinalTranscript {
     /// The transcript, and the label ("Speaker 1"…) of each speaker ID.
     static func lines(chunks: [Chunk], otherSpeakers segments: [SpeakerSegment]) -> (lines: [Line], labels: [String: String]) {
         var labels: [String: String] = [:]
-        let sentences = chunks
-            .flatMap { chunk in sentences(of: chunk).map { (sentence: $0, isMe: chunk.isMe) } }
+        let all = chunks.flatMap { chunk in sentences(of: chunk).map { (sentence: $0, isMe: chunk.isMe) } }
+        let others = all.filter { !$0.isMe }.map(\.sentence)
+        let sentences = all
+            .filter { !$0.isMe || !isEcho($0.sentence, of: others) }
             .sorted { $0.sentence.start < $1.sentence.start }
         var lines: [Line] = []
         for (sentence, isMe) in sentences {
@@ -103,6 +105,22 @@ enum FinalTranscript {
     /// Splits a chunk into sentences, and finds the time of each sentence from the chunk's tokens.
     /// The tokens and the text have nearly the same letters, so the n-th letter of the text is
     /// in the token that holds the n-th letter of the tokens.
+    /// With speakers, the microphone also hears the other people. A sentence of yours is their echo if
+    /// one of their sentences at about the same time (2 s) has at least 60 % of its words.
+    static func isEcho(_ mine: Sentence, of others: [Sentence]) -> Bool {
+        let myWords = words(of: mine.text)
+        guard !myWords.isEmpty else { return false }
+        return others.contains { other in
+            guard other.start - 2 <= mine.end, mine.start <= other.end + 2 else { return false }
+            let theirWords = Set(words(of: other.text))
+            return Double(myWords.count { theirWords.contains($0) }) >= 0.6 * Double(myWords.count)
+        }
+    }
+
+    private static func words(of text: String) -> [String] {
+        text.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init)
+    }
+
     static func sentences(of chunk: Chunk) -> [Sentence] {
         let text = chunk.text
         let tokenizer = NLTokenizer(unit: .sentence)

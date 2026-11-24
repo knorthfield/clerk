@@ -26,6 +26,8 @@ Everything runs on your Mac. Your meetings do not go to the internet.
   downloads the model (about 480 MB) the first time it starts.
 - Speaker separation: pyannote community-1 through FluidAudio. Your microphone is always "Me".
   The other people are "Speaker 1", "Speaker 2"… until you name them.
+  Clerk does not change how the meeting app uses your microphone. With speakers, Clerk removes the
+  other people's echo from your track after the meeting.
 - Summary and action items: Apple Intelligence (the on-device Foundation Models).
   Without Apple Intelligence, Clerk still writes the transcript.
 

@@ -55,6 +55,27 @@ private func chunk(_ text: String, isMe: Bool, start: TimeInterval) -> Chunk {
     ])
 }
 
+@Test func theEchoOfTheOthersOnTheMicrophoneIsRemoved() {
+    let chunks = [
+        chunk("We should cut travel by ten percent.", isMe: false, start: 0),
+        // The microphone heard the speakers, a little late and not quite the same words.
+        chunk("we should cut the travel by ten per cent", isMe: true, start: 0.5),
+        chunk("I agree with that.", isMe: true, start: 3),
+    ]
+    let lines = FinalTranscript.lines(chunks: chunks, otherSpeakers: []).lines
+    #expect(lines == [
+        Line(speaker: "Speaker 1", start: 0, text: "We should cut travel by ten percent."),
+        Line(speaker: "Me", start: 3, text: "I agree with that."),
+    ])
+}
+
+@Test func theSameWordsLaterAreNotAnEcho() {
+    let theirs = FinalTranscript.Sentence(start: 0, end: 3, text: "Budget is approved.")
+    #expect(FinalTranscript.isEcho(.init(start: 60, end: 62, text: "Budget is approved."), of: [theirs]) == false)
+    #expect(FinalTranscript.isEcho(.init(start: 1, end: 3, text: "Budget is approved."), of: [theirs]))
+    #expect(FinalTranscript.isEcho(.init(start: 1, end: 3, text: "…"), of: [theirs]) == false)
+}
+
 @Test func tapsSuggestNamesForSpeakers() {
     let segments: [FinalTranscript.SpeakerSegment] = [
         .init(speakerID: "x", start: 0, end: 10),

@@ -7,10 +7,8 @@ final class MicRecorder: @unchecked Sendable {
     /// `onSamples` gets each converted buffer on the audio thread.
     func start(onSamples: @escaping @Sendable ([Float]) -> Void) throws {
         let input = engine.inputNode
-        // Echo cancellation: with speakers, the microphone also hears the other people. Voice processing
-        // removes what the Mac plays. Do not make the other apps quieter while it runs.
-        try input.setVoiceProcessingEnabled(true)
-        input.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
+        // No voice processing: it takes the microphone in a voice-chat mode, and then the meeting app's
+        // own voice processing gets silence. With speakers, the echo goes in `FinalTranscript.isEcho`.
         let inputFormat = input.outputFormat(forBus: 0)
         guard let resampler = Resampler(from: inputFormat) else { throw MicRecorderError.unsupportedMicrophone }
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
