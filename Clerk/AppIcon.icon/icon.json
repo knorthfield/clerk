@@ -20,8 +20,8 @@
         },
         {
           "glass" : false,
-          "image-name" : "waveform.svg",
-          "name" : "waveform"
+          "image-name" : "header.svg",
+          "name" : "header"
         },
         {
           "glass" : false,
