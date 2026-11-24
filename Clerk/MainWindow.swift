@@ -6,7 +6,7 @@ import SwiftUI
 /// meeting it is a normal window again. The normal window and the panel each keep their own place.
 @MainActor
 final class MainWindow {
-    static let panelSize = NSSize(width: 640, height: 220)
+    static let panelSize = NSSize(width: 360, height: 300)
 
     private static let normalStyle: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
     private static let autosaveName = "MainWindow"

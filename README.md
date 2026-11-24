@@ -12,8 +12,8 @@ meeting app.
   points and prep notes. Fill it in yourself, or click **Copy for AI**, give it to an AI assistant,
   and paste its answer back.
 - **Meet.** When you start, the window becomes a small panel under your camera, so you look at the
-  camera when you read it. The left half shows the live transcript. The right half shows your
-  talking points: the open ones at the top, and the ones you covered ticked below. People do not
+  camera when you read it. The panel shows the time, a Stop button and your talking points:
+  the open ones at the top, and the ones you covered ticked below. People do not
   see the panel when you share your screen.
 - **Get the notes.** When you stop, the window comes back and Clerk writes one markdown file:
   summary, decisions, action items, talking points, agenda, prep notes and the full transcript

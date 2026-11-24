@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// Two halves: notes on the left, the coach on the right.
+/// One column: the controls on top, the talking points below.
 struct MeetingView: View {
     let meeting: Meeting
 
     var body: some View {
-        HStack(spacing: 0) {
-            NotesHalf(meeting: meeting)
-            Divider().padding(.vertical, 16)
-            CoachHalf(meeting: meeting)
+        VStack(alignment: .leading, spacing: 12) {
+            MeetingControls(meeting: meeting)
+            Divider()
+            TalkingPointsList(meeting: meeting)
         }
+        .padding(16)
         .frame(width: MainWindow.panelSize.width, height: MainWindow.panelSize.height)
         // Solid enough to read over any window, and still glass at the edge.
         .background(.thickMaterial, in: .rect(cornerRadius: 24))
@@ -17,7 +18,7 @@ struct MeetingView: View {
     }
 }
 
-private struct NotesHalf: View {
+private struct MeetingControls: View {
     let meeting: Meeting
 
     var body: some View {
@@ -44,10 +45,7 @@ private struct NotesHalf: View {
             if !meeting.participants.isEmpty {
                 SpeakerButtons(meeting: meeting)
             }
-            LiveTranscript(chunks: meeting.chunks.suffix(20))
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -96,32 +94,7 @@ private struct SpeakerButtons: View {
     }
 }
 
-/// The newest text at the bottom, like a chat.
-private struct LiveTranscript: View {
-    let chunks: ArraySlice<Chunk>
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                if chunks.isEmpty {
-                    Text("Listening… the text shows about 15 seconds after it is said.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(chunks) { chunk in
-                    Text("\(Text(chunk.isMe ? "Me" : "Others").bold()) \(chunk.text)")
-                        .foregroundStyle(chunk.isMe ? .secondary : .primary)
-                        .id(chunk.id)
-                }
-            }
-            .font(.callout)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .scrollIndicators(.never)
-        .defaultScrollAnchor(.bottom)
-    }
-}
-
-private struct CoachHalf: View {
+private struct TalkingPointsList: View {
     let meeting: Meeting
 
     private var open: [TalkingPoint] { meeting.talkingPoints.filter { !$0.isCovered } }
@@ -151,7 +124,6 @@ private struct CoachHalf: View {
             }
             .scrollIndicators(.automatic)
         }
-        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
