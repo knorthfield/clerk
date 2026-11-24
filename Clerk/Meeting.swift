@@ -14,6 +14,7 @@ final class Meeting {
 
     /// The saved notes, and the numbered speakers in them.
     struct NamingRequest: Equatable {
+        /// The meeting's folder.
         let url: URL
         let speakers: [SpeakerNamesView.Speaker]
         let participants: [String]
@@ -42,6 +43,8 @@ final class Meeting {
     @ObservationIgnored private let mic = MicRecorder()
     @ObservationIgnored private let systemAudio = SystemAudioTap()
     @ObservationIgnored private var tracks: [TrackWriter] = []
+    /// The meeting's folder in the output folder: the recordings, then the notes.
+    @ObservationIgnored private var folder: URL?
 
     init(prep: Prep) {
         self.prep = prep
@@ -103,7 +106,9 @@ final class Meeting {
     /// Only records: Clerk transcribes the tracks after the meeting.
     private func startRecording() {
         guard stage == .prep else { return }
-        let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
+        let now = Date.now
+        let folder = Self.newFolder(
+            named: MeetingNotes.folderName(startedAt: now, agenda: prep.sections.agenda), in: OutputFolder.url)
         // The two sources start at different times (the first time, macOS asks for permission between
         // them). Keep the audio of both only from the moment both run, so the two tracks have one clock.
         let gate = Gate()
@@ -138,12 +143,13 @@ final class Meeting {
         participants = prep.participantList
         speakerMarks = []
         talkingPoints = prep.talkingPointList.enumerated().map { TalkingPoint(id: $0.offset, text: $0.element) }
-        startedAt = .now
+        self.folder = folder
+        startedAt = now
         stage = .recording
     }
 
     func stop() {
-        guard stage == .recording, case .ready(let models) = modelState else { return }
+        guard stage == .recording, case .ready(let models) = modelState, let folder else { return }
         mic.stop()
         systemAudio.stop()
         micLevel = 0
@@ -165,7 +171,7 @@ final class Meeting {
                     if let chunk = try await TrackTranscriber.chunk(of: url, isMe: isMe, models: models) { chunks.append(chunk) }
                 }
             } catch {
-                lastError = "Transcription failed: \(error.localizedDescription). The audio is in \(urls.first?.deletingLastPathComponent().path ?? "")."
+                lastError = "Transcription failed: \(error.localizedDescription). The recordings are in \(folder.path)."
             }
             var segments: [FinalTranscript.SpeakerSegment] = []
             if chunks.contains(where: { !$0.isMe }), let othersURL = urls.last {
@@ -192,17 +198,23 @@ final class Meeting {
                     notes.summaryProblem = error.localizedDescription
                 }
             }
-            save(notes, suggestedNames: suggestedNames)
+            for url in urls {
+                do {
+                    try TrackWriter.compress(url)
+                } catch {
+                    lastError = "The recording \(url.lastPathComponent) was not compressed: \(error.localizedDescription)"
+                }
+            }
+            save(notes, in: folder, suggestedNames: suggestedNames)
         }
     }
 
-    /// Writes the file at once, so it is never lost, then asks for the speakers' names.
-    private func save(_ notes: MeetingNotes, suggestedNames: [String: String]) {
-        let folder = OutputFolder.url
-        let url = folder.appending(path: notes.fileName)
+    /// Writes the files at once, so they are never lost, then asks for the speakers' names.
+    private func save(_ notes: MeetingNotes, in folder: URL, suggestedNames: [String: String]) {
         do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            try notes.markdown.write(to: url, atomically: true, encoding: .utf8)
+            try notes.summaryMarkdown.write(to: folder.appending(path: MeetingNotes.summaryFile), atomically: true, encoding: .utf8)
+            try notes.transcriptMarkdown.write(to: folder.appending(path: MeetingNotes.transcriptFile), atomically: true, encoding: .utf8)
+            try notes.prepMarkdown?.write(to: folder.appending(path: MeetingNotes.prepFile), atomically: true, encoding: .utf8)
         } catch {
             lastError = "The notes were not saved: \(error.localizedDescription)"
             stage = .prep
@@ -212,22 +224,38 @@ final class Meeting {
             SpeakerNamesView.Speaker(label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "")
         }
         stage = speakers.isEmpty
-            ? .done(url)
+            ? .done(folder)
             : .naming(NamingRequest(
-                url: url, speakers: speakers, participants: notes.participants, suggestedNames: suggestedNames))
+                url: folder, speakers: speakers, participants: notes.participants, suggestedNames: suggestedNames))
     }
 
-    /// Puts the names in the file. No names keeps the numbers.
+    /// Puts the names in the summary and the transcript. No names keeps the numbers.
     func finishNaming(_ names: [String: String]) {
         guard case .naming(let request) = stage else { return }
-        if !names.isEmpty, let markdown = try? String(contentsOf: request.url, encoding: .utf8) {
-            try? MeetingNotes.renaming(markdown, names: names).write(to: request.url, atomically: true, encoding: .utf8)
+        if !names.isEmpty {
+            for file in [MeetingNotes.summaryFile, MeetingNotes.transcriptFile] {
+                let url = request.url.appending(path: file)
+                guard let markdown = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                try? MeetingNotes.renaming(markdown, names: names).write(to: url, atomically: true, encoding: .utf8)
+            }
         }
         stage = .done(request.url)
     }
 
+    /// A folder that does not exist yet: "name", else "name 2", "name 3"…
+    nonisolated static func newFolder(named name: String, in parent: URL) -> URL {
+        var folder = parent.appending(path: name, directoryHint: .isDirectory)
+        var number = 2
+        while FileManager.default.fileExists(atPath: folder.path) {
+            folder = parent.appending(path: "\(name) \(number)", directoryHint: .isDirectory)
+            number += 1
+        }
+        return folder
+    }
+
     /// Back to the prep, which still has the last meeting's text.
     func newMeeting() {
+        folder = nil
         participants = []
         speakerMarks = []
         talkingPoints = []
@@ -247,9 +275,6 @@ final class Meeting {
         talkingPoints[index].isCovered.toggle()
     }
 
-    static func folderName(for date: Date) -> String {
-        date.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).timeSeparator(.omitted))
-    }
 }
 
 /// Closed until both audio sources run.

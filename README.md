@@ -16,10 +16,16 @@ meeting app.
   the open ones at the top, and the ones you covered ticked below. People do not
   see the panel when you share your screen.
 - **Get the notes.** Clerk only records during the meeting. When you stop, the window comes back,
-  Clerk transcribes the recording (about a minute for an hour) and writes one markdown file:
-  summary, decisions, action items, talking points, agenda, prep notes and the full transcript
-  with a speaker for each turn. You pick who each speaker was from your participants, and the
-  notes show in the window.
+  Clerk transcribes the recording (about a minute for an hour), and you pick who each speaker was
+  from your participants. Each meeting gets its own folder in your notes folder, for example
+  `2026-11-24 1000 Product launch/`:
+  - `summary.md`: summary, decisions, action items and talking points
+  - `transcript.md`: the transcript with a speaker and the time of day for each turn, with front
+    matter (date, time, duration, attendees)
+  - `prep.md`: participants, agenda and prep notes
+  - `me.m4a` and `others.m4a`: the recordings of your microphone and of the other people
+
+  The window shows the summary and the transcript.
 
 Everything runs on your Mac. Your meetings do not go to the internet.
 

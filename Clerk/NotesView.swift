@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// The finished meeting notes, formatted. The file is the record; this reads it.
+/// The finished meeting notes, formatted: the summary, then the transcript. The files in the
+/// meeting's folder are the record; this reads them.
 struct NotesView: View {
+    /// The meeting's folder.
     let url: URL
     let newMeeting: () -> Void
     @State private var blocks: [NoteBlock] = []
@@ -21,8 +23,8 @@ struct NotesView: View {
             }
             Divider()
             HStack(spacing: 12) {
-                Button("Open in Default App") { NSWorkspace.shared.open(url) }
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Button("Open Summary") { NSWorkspace.shared.open(url.appending(path: MeetingNotes.summaryFile)) }
+                Button("Show in Finder") { NSWorkspace.shared.open(url) }
                 Spacer()
                 Button("New Meeting", action: newMeeting)
                     .buttonStyle(.borderedProminent)
@@ -32,7 +34,9 @@ struct NotesView: View {
             .padding(.vertical, 10)
         }
         .task(id: url) {
-            blocks = NoteBlock.blocks(of: (try? String(contentsOf: url, encoding: .utf8)) ?? "")
+            blocks = [MeetingNotes.summaryFile, MeetingNotes.transcriptFile].flatMap { file in
+                NoteBlock.blocks(of: (try? String(contentsOf: url.appending(path: file), encoding: .utf8)) ?? "")
+            }
         }
     }
 }
@@ -79,7 +83,12 @@ enum NoteBlock: Equatable {
             if !paragraph.isEmpty { blocks.append(.paragraph(paragraph.joined(separator: "\n"))) }
             paragraph = []
         }
-        for line in markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
+        var lines = markdown.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        // Front matter: not shown.
+        if lines.first == "---", let end = lines.dropFirst().firstIndex(of: "---") {
+            lines.removeSubrange(...end)
+        }
+        for line in lines {
             let block: NoteBlock? =
                 if line.hasPrefix("# ") { .title(String(line.dropFirst(2))) }
                 else if line.hasPrefix("## ") { .heading(String(line.dropFirst(3))) }

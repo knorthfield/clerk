@@ -20,28 +20,71 @@ private func notes() -> MeetingNotes {
     )
 }
 
-@Test func fileNameHasTheDateAndASafeTitle() {
-    #expect(notes().fileName == "2026-11-13 1405 Q3 budget - forecast.md")
+@Test func folderNameHasTheDateAndASafeTitle() {
+    let notes = notes()
+    #expect(MeetingNotes.folderName(startedAt: notes.startedAt, agenda: notes.agenda) == "2026-11-13 1405 Q3 budget - forecast")
 }
 
-@Test func markdownHasEverySection() {
-    let markdown = notes().markdown
+@Test func summaryHasItsSections() {
+    let markdown = notes().summaryMarkdown
     #expect(markdown.hasPrefix("# Q3 budget / forecast\n\n"))
     #expect(markdown.contains("42 min · Speaker 1, Me"))
     #expect(markdown.contains("## Summary\n\nWe agreed the budget."))
     #expect(markdown.contains("## Decisions\n\n- Cut travel"))
     #expect(markdown.contains("## Action items\n\n- [ ] **Speaker 1** — Send the job descriptions by Friday"))
-    #expect(markdown.contains("## Talking points\n\n- [x] Budget\n- [ ] Hiring"))
-    #expect(!markdown.contains("## Prep notes"))
-    #expect(markdown.hasSuffix("## Transcript\n\n**Speaker 1** [00:00:03]: Hello all.\n\n**Me** [01:02:05]: Morning.\n"))
+    #expect(markdown.hasSuffix("## Talking points\n\n- [x] Budget\n- [ ] Hiring\n"))
+    #expect(!markdown.contains("## Transcript"))
 }
 
-@Test func markdownSaysWhyThereIsNoSummary() {
+@Test func summarySaysWhyThereIsNoSummary() {
     var notes = notes()
     notes.summary = nil
     notes.summaryProblem = "turn on Apple Intelligence"
-    #expect(notes.markdown.contains("## Summary\n\n_Summary not available: turn on Apple Intelligence._"))
-    #expect(!notes.markdown.contains("## Action items"))
+    #expect(notes.summaryMarkdown.contains("## Summary\n\n_Summary not available: turn on Apple Intelligence._"))
+    #expect(!notes.summaryMarkdown.contains("## Action items"))
+}
+
+@Test func transcriptHasFrontMatterAndClockTimes() {
+    #expect(notes().transcriptMarkdown == """
+        ---
+        type: meeting
+        created: "2026-11-13"
+        time: "14:05"
+        duration: "42:00"
+        attendees: ["Speaker 1", "Me"]
+        ---
+
+        # Q3 budget / forecast: 2026-11-13 14:05
+
+        ## Transcript
+
+        **Speaker 1** (14:05:03)
+        Hello all.
+
+        **Me** (15:07:05)
+        Morning.
+
+        """)
+}
+
+@Test func durationHasHoursOnlyFromOneHour() {
+    #expect(MeetingNotes.duration(18 * 60 + 42) == "18:42")
+    #expect(MeetingNotes.duration(3725) == "1:02:05")
+}
+
+@Test func prepHasTheAgendaAndIsLeftOutWhenEmpty() {
+    var notes = notes()
+    #expect(notes.prepMarkdown == "# Q3 budget / forecast: prep\n\n## Agenda\n\n1. Q3 budget / forecast\n2. Hiring\n")
+    notes.agenda = ""
+    #expect(notes.prepMarkdown == nil)
+}
+
+@Test func aNewFolderDoesNotReplaceAnOldOne() throws {
+    let parent = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: parent.appending(path: "Meeting"), withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: parent) }
+    #expect(Meeting.newFolder(named: "Meeting", in: parent).lastPathComponent == "Meeting 2")
+    #expect(Meeting.newFolder(named: "Other", in: parent).lastPathComponent == "Other")
 }
 
 @Test func renamingReplacesOnlyTheWholeLabel() {

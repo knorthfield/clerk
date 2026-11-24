@@ -1,6 +1,6 @@
 import Foundation
 
-/// Everything that goes into the meeting's markdown file.
+/// Everything that goes into the meeting's markdown files.
 struct MeetingNotes {
     var startedAt: Date
     var duration: TimeInterval
@@ -20,18 +20,23 @@ struct MeetingNotes {
         return lines.map(\.speaker).filter { seen.insert($0).inserted }
     }
 
-    var fileName: String {
+    /// The meeting's folder in the output folder: "2026-11-13 1405 Q3 budget".
+    static func folderName(startedAt: Date, agenda: String) -> String {
         let date = startedAt.formatted(.verbatim("\(year: .defaultDigits)-\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased))\(minute: .twoDigits)", timeZone: .current, calendar: .current))
-        let safeTitle = title.replacing(/[\/:\\]/, with: "-").prefix(60)
-        return "\(date) \(safeTitle).md"
+        let title = Prep.lines(of: agenda).first ?? "Meeting"
+        return "\(date) \(title.replacing(/[\/:\\]/, with: "-").prefix(60))"
     }
 
-    var markdown: String {
+    static let summaryFile = "summary.md"
+    static let transcriptFile = "transcript.md"
+    static let prepFile = "prep.md"
+
+    /// Summary, decisions, action items and talking points.
+    var summaryMarkdown: String {
         var out: [String] = []
         let date = startedAt.formatted(.dateTime.day().month(.abbreviated).year().hour().minute())
         out.append("# \(title)")
         out.append("\(date) · \(Int((duration / 60).rounded())) min" + (speakers.isEmpty ? "" : " · \(speakers.joined(separator: ", "))"))
-
         out.append("## Summary")
         out.append(summary?.summary ?? "_Summary not available: \(summaryProblem ?? "no speech was recorded")._")
         if let decisions = summary?.decisions, !decisions.isEmpty {
@@ -46,6 +51,16 @@ struct MeetingNotes {
             out.append("## Talking points")
             out.append(talkingPoints.map { "- [\($0.isCovered ? "x" : " ")] \($0.text)" }.joined(separator: "\n"))
         }
+        return out.joined(separator: "\n\n") + "\n"
+    }
+
+    /// Participants, agenda and prep notes. Nil if the prep was empty.
+    var prepMarkdown: String? {
+        var out: [String] = []
+        if !participants.isEmpty {
+            out.append("## Participants")
+            out.append(participants.map { "- \($0)" }.joined(separator: "\n"))
+        }
         if !agenda.isEmpty {
             out.append("## Agenda")
             out.append(agenda)
@@ -54,19 +69,55 @@ struct MeetingNotes {
             out.append("## Prep notes")
             out.append(prepNotes)
         }
-        out.append("## Transcript")
-        out.append(lines.isEmpty ? "_No speech was recorded._" : lines.map { "**\($0.speaker)** [\(Self.time($0.start))]: \($0.text)" }.joined(separator: "\n\n"))
-        return out.joined(separator: "\n\n") + "\n"
+        guard !out.isEmpty else { return nil }
+        return (["# \(title): prep"] + out).joined(separator: "\n\n") + "\n"
+    }
+
+    /// The transcript with front matter, like HushScribe's: each turn is the speaker and the clock time,
+    /// then the text.
+    var transcriptMarkdown: String {
+        let quotedSpeakers = speakers.map { "\"\($0)\"" }.joined(separator: ", ")
+        var out = """
+            ---
+            type: meeting
+            created: "\(Self.format(startedAt, "yyyy-MM-dd"))"
+            time: "\(Self.format(startedAt, "HH:mm"))"
+            duration: "\(Self.duration(duration))"
+            attendees: [\(quotedSpeakers)]
+            ---
+
+            # \(title): \(Self.format(startedAt, "yyyy-MM-dd HH:mm"))
+
+            ## Transcript
+
+
+            """
+        out += lines.isEmpty
+            ? "_No speech was recorded._"
+            : lines.map { "**\($0.speaker)** (\(Self.format(startedAt.addingTimeInterval($0.start), "HH:mm:ss")))\n\($0.text)" }
+                .joined(separator: "\n\n")
+        return out + "\n"
+    }
+
+    private static func format(_ date: Date, _ pattern: String) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
+    }
+
+    /// "18:42", or "1:02:05" from one hour.
+    static func duration(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        return total >= 3600
+            ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
+            : String(format: "%d:%02d", total / 60, total % 60)
     }
 
     /// The transcript as the language model reads it.
     var transcriptText: String {
         lines.map { "\($0.speaker): \($0.text)" }.joined(separator: "\n")
-    }
-
-    static func time(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds)
-        return String(format: "%02d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
     }
 
     /// Replaces numbered speaker labels with names, everywhere in the file.
