@@ -23,8 +23,8 @@ meeting app.
 
 Everything runs on your Mac. Your meetings do not go to the internet.
 
-- Speech recognition: Parakeet TDT 0.6B v3 through FluidAudio (25 European languages). Clerk
-  downloads the model (about 480 MB) the first time it starts.
+- Speech recognition: Parakeet Ultra (a more accurate training of Parakeet TDT 0.6B v3) through
+  FluidAudio (25 European languages). Clerk downloads the model (about 600 MB) the first time it starts.
 - Speaker separation: pyannote community-1 through FluidAudio. Your microphone is always "Me".
   The other people are "Speaker 1", "Speaker 2"… until you name them.
   Clerk does not change how the meeting app uses your microphone. With speakers, Clerk removes the

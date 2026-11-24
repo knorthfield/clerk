@@ -66,12 +66,12 @@ final class Meeting {
         if case .failed = modelState { true } else { false }
     }
 
-    /// Downloads the model on first use (about 480 MB), then loads it from the cache.
+    /// Downloads the model on first use (about 600 MB), then loads it from the cache.
     func loadModel() {
         modelState = .loading(0)
         Task {
             do {
-                let models = try await AsrModels.downloadAndLoad(version: .v3) { progress in
+                let models = try await AsrModels.downloadAndLoad(version: .ultra) { progress in
                     Task { @MainActor [weak self] in
                         if case .loading = self?.modelState { self?.modelState = .loading(progress.fractionCompleted) }
                     }
