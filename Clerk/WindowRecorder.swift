@@ -1,7 +1,8 @@
 import AVFoundation
 import ScreenCaptureKit
 
-/// Records one window that you pick (the meeting app) to a video file, with the sound of both sides.
+/// Records one window that you pick (the meeting app) to a video file, with the sound of the other apps.
+/// It does not open the microphone: `MicRecorder` has it, and Clerk adds your voice to the video after the meeting.
 /// The system's window picker gives Clerk access to that window only, so Clerk does not need the
 /// Screen Recording permission.
 @MainActor
@@ -57,13 +58,11 @@ final class WindowRecorder: NSObject {
         configuration.showsCursor = false
         configuration.capturesAudio = true
         configuration.excludesCurrentProcessAudio = true
-        configuration.captureMicrophone = true
 
         let recording = SCRecordingOutputConfiguration()
         recording.outputURL = url
         recording.outputFileType = .mp4
         recording.videoCodecType = .hevc
-        if #available(macOS 27.0, *) { recording.mixesAudioWithMicrophone = true }
 
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         let output = SCRecordingOutput(configuration: recording, delegate: self)

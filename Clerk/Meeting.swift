@@ -218,6 +218,7 @@ final class Meeting {
         self.live = nil
         let startedAt = startedAt ?? .now
         let duration = Date.now.timeIntervalSince(startedAt)
+        let meURL = tracks.first?.url
         let othersURL = tracks.last?.url
         tracks = []
         let video = video
@@ -235,7 +236,7 @@ final class Meeting {
                 do {
                     try FileManager.default.createDirectory(at: OutputFolder.url, withIntermediateDirectories: true)
                     try await MeetingVideo.align(
-                        rawVideo, from: startedAt.timeIntervalSince(videoStartedAt), to: url)
+                        rawVideo, from: startedAt.timeIntervalSince(videoStartedAt), voice: meURL, to: url)
                     try? FileManager.default.removeItem(at: rawVideo)
                     notes.videoFileName = url.lastPathComponent
                     videoURL = url

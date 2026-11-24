@@ -4,16 +4,40 @@ import Vision
 
 /// The video of the meeting window, after the meeting.
 enum MeetingVideo {
-    /// Copies the video from `offset` seconds, so that its time is the transcript's time. No new encoding.
-    static func align(_ source: URL, from offset: TimeInterval, to destination: URL) async throws {
+    /// Copies the video from `offset` seconds, so that its time is the transcript's time, and adds your
+    /// voice from `voice` (the microphone track, which starts at the transcript's time 0). No new video encoding.
+    static func align(_ source: URL, from offset: TimeInterval, voice: URL?, to destination: URL) async throws {
         let asset = AVURLAsset(url: source)
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetPassthrough)
-        else { throw CocoaError(.fileWriteUnknown) }
         let duration = try await asset.load(.duration)
         let start = CMTime(seconds: max(offset, 0), preferredTimescale: 600)
-        session.timeRange = CMTimeRange(start: start, end: duration)
+        let range = CMTimeRange(start: start, end: duration)
+        let composition = AVMutableComposition()
+        for track in try await asset.load(.tracks) {
+            let copy = composition.addMutableTrack(withMediaType: track.mediaType, preferredTrackID: kCMPersistentTrackID_Invalid)
+            try copy?.insertTimeRange(range, of: track, at: .zero)
+            if let copy { copy.preferredTransform = try await track.load(.preferredTransform) }
+        }
+        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        if let voice {
+            // The microphone track is PCM, which an MP4 file cannot hold. Make it AAC first.
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let aac = folder.appending(path: "me.m4a")
+            try await export(AVURLAsset(url: voice), preset: AVAssetExportPresetAppleM4A, to: aac, as: .m4a)
+            let voiceAsset = AVURLAsset(url: aac)
+            if let track = try await voiceAsset.loadTracks(withMediaType: .audio).first {
+                let length = min(try await voiceAsset.load(.duration), range.duration)
+                let copy = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+                try copy?.insertTimeRange(CMTimeRange(start: .zero, duration: length), of: track, at: .zero)
+            }
+        }
+        try await export(composition, preset: AVAssetExportPresetPassthrough, to: destination, as: .mp4)
+    }
+
+    private static func export(_ asset: AVAsset, preset: String, to destination: URL, as fileType: AVFileType) async throws {
+        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else { throw CocoaError(.fileWriteUnknown) }
         try? FileManager.default.removeItem(at: destination)
-        try await session.export(to: destination, as: .mp4)
+        try await session.export(to: destination, as: fileType)
     }
 }
 
