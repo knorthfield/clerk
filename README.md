@@ -15,7 +15,8 @@ meeting app.
   camera when you read it. The panel shows the time, a Stop button and your talking points:
   the open ones at the top, and the ones you covered ticked below. People do not
   see the panel when you share your screen.
-- **Get the notes.** When you stop, the window comes back and Clerk writes one markdown file:
+- **Get the notes.** Clerk only records during the meeting. When you stop, the window comes back,
+  Clerk transcribes the recording (about a minute for an hour) and writes one markdown file:
   summary, decisions, action items, talking points, agenda, prep notes and the full transcript
   with a speaker for each turn. You pick who each speaker was from your participants, and the
   notes show in the window.

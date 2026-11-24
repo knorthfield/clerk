@@ -34,8 +34,6 @@ final class Meeting {
     private(set) var micLevel: Float = 0
     private(set) var othersLevel: Float = 0
     var talkingPoints: [TalkingPoint] = []
-    /// The transcript so far, in the order the chunks were transcribed.
-    private(set) var chunks: [Chunk] = []
     /// The participants from Meeting Prep, to tap when one of them talks.
     private(set) var participants: [String] = []
     private(set) var speakerMarks: [FinalTranscript.SpeakerMark] = []
@@ -44,7 +42,6 @@ final class Meeting {
     @ObservationIgnored private let mic = MicRecorder()
     @ObservationIgnored private let systemAudio = SystemAudioTap()
     @ObservationIgnored private var tracks: [TrackWriter] = []
-    @ObservationIgnored private var live: LiveTranscriber?
 
     init(prep: Prep) {
         self.prep = prep
@@ -91,7 +88,7 @@ final class Meeting {
     }
 
     func start() {
-        guard stage == .prep, case .ready(let models) = modelState else { return }
+        guard canStart else { return }
         Task {
             // Ask first: if the system prompt shows while the audio engine starts, the app stops responding.
             await Permissions.requestMicrophone()
@@ -99,18 +96,14 @@ final class Meeting {
                 lastError = "Clerk needs the microphone. Allow it in System Settings › Privacy & Security."
                 return
             }
-            start(models: models)
+            startRecording()
         }
     }
 
-    private func start(models: AsrModels) {
+    /// Only records: Clerk transcribes the tracks after the meeting.
+    private func startRecording() {
         guard stage == .prep else { return }
         let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
-        let live = LiveTranscriber(models: models) { [weak self] chunk in
-            Task { @MainActor in self?.chunks.append(chunk) }
-        } onError: { [weak self] error in
-            Task { @MainActor in self?.lastError = error.localizedDescription }
-        }
         // The two sources start at different times (the first time, macOS asks for permission between
         // them). Keep the audio of both only from the moment both run, so the two tracks have one clock.
         let gate = Gate()
@@ -121,7 +114,6 @@ final class Meeting {
             try mic.start { [weak self] samples in
                 guard gate.isOpen else { return }
                 micTrack.append(samples)
-                live.feed(samples, isMe: true)
                 let level = level(of: samples)
                 Task { @MainActor in self?.micLevel = level }
             }
@@ -129,7 +121,6 @@ final class Meeting {
                 try systemAudio.start { [weak self] samples in
                     guard gate.isOpen else { return }
                     othersTrack.append(samples)
-                    live.feed(samples, isMe: false)
                     let level = level(of: samples)
                     Task { @MainActor in self?.othersLevel = level }
                 }
@@ -140,13 +131,10 @@ final class Meeting {
             tracks = [micTrack, othersTrack]
         } catch {
             lastError = error.localizedDescription
-            Task { await live.finish() }
             return
         }
         gate.open()
-        self.live = live
         lastError = nil
-        chunks = []
         participants = prep.participantList
         speakerMarks = []
         talkingPoints = prep.talkingPointList.enumerated().map { TalkingPoint(id: $0.offset, text: $0.element) }
@@ -155,26 +143,32 @@ final class Meeting {
     }
 
     func stop() {
-        guard stage == .recording, let live else { return }
+        guard stage == .recording, case .ready(let models) = modelState else { return }
         mic.stop()
         systemAudio.stop()
         micLevel = 0
         othersLevel = 0
         stage = .processing
-        self.live = nil
         let startedAt = startedAt ?? .now
         let duration = Date.now.timeIntervalSince(startedAt)
-        let othersURL = tracks.last?.url
+        for track in tracks { track.close() }
+        let urls = tracks.map(\.url)
         tracks = []
         Task {
-            await live.finish()
             var notes = MeetingNotes(
                 startedAt: startedAt, duration: duration, agenda: prep.sections.agenda, prepNotes: prep.sections.notes,
                 participants: prep.participantList, talkingPoints: talkingPoints, lines: []
             )
-            let others = chunks.filter { !$0.isMe }
+            var chunks: [Chunk] = []
+            do {
+                for (url, isMe) in zip(urls, [true, false]) {
+                    if let chunk = try await TrackTranscriber.chunk(of: url, isMe: isMe, models: models) { chunks.append(chunk) }
+                }
+            } catch {
+                lastError = "Transcription failed: \(error.localizedDescription). The audio is in \(urls.first?.deletingLastPathComponent().path ?? "")."
+            }
             var segments: [FinalTranscript.SpeakerSegment] = []
-            if !others.isEmpty, let othersURL {
+            if chunks.contains(where: { !$0.isMe }), let othersURL = urls.last {
                 do {
                     segments = try await FinalTranscript.speakerSegments(of: othersURL)
                 } catch {
@@ -234,7 +228,6 @@ final class Meeting {
 
     /// Back to the prep, which still has the last meeting's text.
     func newMeeting() {
-        chunks = []
         participants = []
         speakerMarks = []
         talkingPoints = []

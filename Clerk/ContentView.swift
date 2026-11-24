@@ -17,7 +17,7 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                     Text("Writing the meeting notes…").font(.headline)
-                    Text("Clerk finds who spoke when, then writes the summary.").foregroundStyle(.secondary)
+                    Text("Clerk writes the transcript, finds who spoke when, then writes the summary.").foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .naming(let request):

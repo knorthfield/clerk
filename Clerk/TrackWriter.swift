@@ -20,6 +20,11 @@ final class TrackWriter: @unchecked Sendable {
         lock.withLock { try? file.write(from: buffer) }
     }
 
+    /// Writes the end of the file. Call after the last `append`.
+    func close() {
+        lock.withLock { file.close() }
+    }
+
     /// Reads a track back as 16 kHz mono samples.
     static func read(_ url: URL) throws -> [Float] {
         let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatFloat32, interleaved: false)
