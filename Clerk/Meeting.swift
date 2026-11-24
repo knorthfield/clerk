@@ -45,7 +45,6 @@ final class Meeting {
     @ObservationIgnored private let systemAudio = SystemAudioTap()
     @ObservationIgnored private var tracks: [TrackWriter] = []
     @ObservationIgnored private var live: LiveTranscriber?
-    @ObservationIgnored private var video: WindowRecorder?
 
     init(prep: Prep) {
         self.prep = prep
@@ -100,32 +99,13 @@ final class Meeting {
                 lastError = "Clerk needs the microphone. Allow it in System Settings › Privacy & Security."
                 return
             }
-            let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
-            var video: WindowRecorder?
-            if VideoRecording.isOn {
-                let recorder = WindowRecorder()
-                guard let filter = await recorder.pickWindow() else { return }
-                do {
-                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                    try await recorder.start(filter: filter, url: folder.appending(path: "video.mp4"))
-                } catch {
-                    lastError = "The video did not start: \(error.localizedDescription)"
-                    return
-                }
-                recorder.onFailure = { [weak self] error in
-                    self?.lastError = "The video stopped: \(error.localizedDescription)"
-                }
-                video = recorder
-            }
-            start(models: models, folder: folder, video: video)
+            start(models: models)
         }
     }
 
-    private func start(models: AsrModels, folder: URL, video: WindowRecorder?) {
-        guard stage == .prep else {
-            Task { _ = await video?.stop() }
-            return
-        }
+    private func start(models: AsrModels) {
+        guard stage == .prep else { return }
+        let folder = Self.storageFolder.appending(path: Self.folderName(for: .now), directoryHint: .isDirectory)
         let live = LiveTranscriber(models: models) { [weak self] chunk in
             Task { @MainActor in self?.chunks.append(chunk) }
         } onError: { [weak self] error in
@@ -160,15 +140,11 @@ final class Meeting {
             tracks = [micTrack, othersTrack]
         } catch {
             lastError = error.localizedDescription
-            Task {
-                await live.finish()
-                _ = await video?.stop()
-            }
+            Task { await live.finish() }
             return
         }
         gate.open()
         self.live = live
-        self.video = video
         lastError = nil
         chunks = []
         participants = prep.participantList
@@ -188,32 +164,14 @@ final class Meeting {
         self.live = nil
         let startedAt = startedAt ?? .now
         let duration = Date.now.timeIntervalSince(startedAt)
-        let meURL = tracks.first?.url
         let othersURL = tracks.last?.url
         tracks = []
-        let video = video
-        self.video = nil
         Task {
-            let rawVideo = await video?.stop()
             await live.finish()
             var notes = MeetingNotes(
                 startedAt: startedAt, duration: duration, agenda: prep.sections.agenda, prepNotes: prep.sections.notes,
                 participants: prep.participantList, talkingPoints: talkingPoints, lines: []
             )
-            var videoURL: URL?
-            if let rawVideo, let videoStartedAt = video?.startedAt {
-                let url = OutputFolder.url.appending(path: notes.baseName + ".mp4")
-                do {
-                    try FileManager.default.createDirectory(at: OutputFolder.url, withIntermediateDirectories: true)
-                    try await MeetingVideo.align(
-                        rawVideo, from: startedAt.timeIntervalSince(videoStartedAt), voice: meURL, to: url)
-                    try? FileManager.default.removeItem(at: rawVideo)
-                    notes.videoFileName = url.lastPathComponent
-                    videoURL = url
-                } catch {
-                    lastError = "The video was not saved: \(error.localizedDescription)"
-                }
-            }
             let others = chunks.filter { !$0.isMe }
             var segments: [FinalTranscript.SpeakerSegment] = []
             if !others.isEmpty, let othersURL {
@@ -225,18 +183,8 @@ final class Meeting {
             }
             let transcript = FinalTranscript.lines(chunks: chunks, otherSpeakers: segments)
             notes.lines = transcript.lines
-            var suggestedNames = FinalTranscript.suggestedNames(
+            let suggestedNames = FinalTranscript.suggestedNames(
                 marks: speakerMarks, segments: segments, labels: transcript.labels)
-            var pictures: [String: NSImage] = [:]
-            if let videoURL, !segments.isEmpty {
-                pictures = await MeetingVideo.pictures(of: videoURL, segments: segments, labels: transcript.labels)
-                if !notes.participants.isEmpty {
-                    let sightings = await MeetingVideo.sightings(of: videoURL, segments: segments, participants: notes.participants)
-                    suggestedNames = FinalTranscript.merged(
-                        taps: suggestedNames,
-                        video: FinalTranscript.suggestedNames(sightings: sightings, segments: segments, labels: transcript.labels))
-                }
-            }
             if notes.lines.isEmpty {
                 notes.summaryProblem = "no speech was recorded"
             } else if !MeetingAssistant.isAvailable {
@@ -250,12 +198,12 @@ final class Meeting {
                     notes.summaryProblem = error.localizedDescription
                 }
             }
-            save(notes, suggestedNames: suggestedNames, pictures: pictures)
+            save(notes, suggestedNames: suggestedNames)
         }
     }
 
     /// Writes the file at once, so it is never lost, then asks for the speakers' names.
-    private func save(_ notes: MeetingNotes, suggestedNames: [String: String], pictures: [String: NSImage]) {
+    private func save(_ notes: MeetingNotes, suggestedNames: [String: String]) {
         let folder = OutputFolder.url
         let url = folder.appending(path: notes.fileName)
         do {
@@ -267,8 +215,7 @@ final class Meeting {
             return
         }
         let speakers = notes.speakers.filter { $0 != FinalTranscript.me }.map { label in
-            SpeakerNamesView.Speaker(
-                label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "", picture: pictures[label])
+            SpeakerNamesView.Speaker(label: label, firstWords: notes.lines.first { $0.speaker == label }?.text ?? "")
         }
         stage = speakers.isEmpty
             ? .done(url)

@@ -25,15 +25,7 @@ import Testing
         .task(isDone: false, text: "**Sarah** — Send the job descriptions"),
         .task(isDone: true, text: "Budget"),
         .bullet("Cut travel"),
-        .line(speaker: "Me", time: 5, text: "Hello.\nSecond line."),
-        .line(speaker: "Sarah", time: 9, text: "Hi."),
+        .paragraph("**Me** [00:00:05]: Hello.\nSecond line."),
+        .paragraph("**Sarah** [00:00:09]: Hi."),
     ])
-}
-
-@Test func transcriptLinesHaveTheirTime() {
-    #expect(NoteBlock.blocks(of: "**Speaker 2** [01:02:05]: Morning.") == [
-        .line(speaker: "Speaker 2", time: 3725, text: "Morning."),
-    ])
-    // Bold text without a time stays a paragraph.
-    #expect(NoteBlock.blocks(of: "**Me** said [hi]: yes") == [.paragraph("**Me** said [hi]: yes")])
 }
