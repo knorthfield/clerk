@@ -55,25 +55,42 @@ private func chunk(_ text: String, isMe: Bool, start: TimeInterval) -> Chunk {
     ])
 }
 
-@Test func theEchoOfTheOthersOnTheMicrophoneIsRemoved() {
-    let chunks = [
-        chunk("We should cut travel by ten percent.", isMe: false, start: 0),
-        // The microphone heard the speakers, a little late and not quite the same words.
-        chunk("we should cut the travel by ten per cent", isMe: true, start: 0.5),
-        chunk("I agree with that.", isMe: true, start: 3),
-    ]
-    let lines = FinalTranscript.lines(chunks: chunks, otherSpeakers: []).lines
-    #expect(lines == [
-        Line(speaker: "Speaker 1", start: 0, text: "We should cut travel by ten percent."),
-        Line(speaker: "Me", start: 3, text: "I agree with that."),
-    ])
+private func sentence(_ text: String, at start: TimeInterval) -> FinalTranscript.Sentence {
+    .init(start: start, end: start + 3, text: text)
 }
 
-@Test func theSameWordsLaterAreNotAnEcho() {
-    let theirs = FinalTranscript.Sentence(start: 0, end: 3, text: "Budget is approved.")
-    #expect(FinalTranscript.isEcho(.init(start: 60, end: 62, text: "Budget is approved."), of: [theirs]) == false)
-    #expect(FinalTranscript.isEcho(.init(start: 1, end: 3, text: "Budget is approved."), of: [theirs]))
-    #expect(FinalTranscript.isEcho(.init(start: 1, end: 3, text: "…"), of: [theirs]) == false)
+private let theirLines = [
+    "We should cut travel by ten percent next quarter.",
+    "The two platform engineers start in December this year.",
+    "Marketing wants the launch moved to the first week of March.",
+    "Can everyone send their slides to Priya by Thursday please.",
+    "The budget review is on the fourteenth at ten in the morning.",
+]
+
+@Test func withSpeakersEveryEchoGoesAndYourOwnWordsStay() {
+    let theirs = theirLines.enumerated().map { sentence($0.element, at: Double($0.offset) * 20) }
+    // The microphone heard each of their lines, a little late and not quite the same words.
+    var mine = theirLines.enumerated().map { sentence($0.element.lowercased().replacing("ten", with: "10"), at: Double($0.offset) * 20 + 0.4) }
+    mine.append(sentence("I agree with the travel cut.", at: 8))
+    mine.sort { $0.start < $1.start }
+    let echoes = FinalTranscript.echoes(in: mine, of: theirs)
+    #expect(echoes.count == 5)
+    #expect(!echoes.contains(mine.firstIndex { $0.text.hasPrefix("I agree") }!))
+}
+
+@Test func withHeadphonesOneRepeatStaysAndARunGoes() {
+    let theirs = theirLines.enumerated().map { sentence($0.element, at: Double($0.offset) * 4) }
+    // You repeat one of their lines: no echo.
+    #expect(FinalTranscript.echoes(in: [sentence(theirLines[0], at: 0.5)], of: theirs).isEmpty)
+    // Three in a row: echo, even with no other sign of speakers.
+    let run = (0..<3).map { sentence(theirLines[$0], at: Double($0) * 4 + 0.5) }
+    #expect(FinalTranscript.echoes(in: run, of: theirs) == [0, 1, 2])
+}
+
+@Test func shortRepliesAndLaterRepeatsAreNotEchoes() {
+    let theirs = (0..<6).map { sentence("Okay. " + theirLines[$0 % 5], at: Double($0) * 4) }
+    #expect(FinalTranscript.echoes(in: [sentence("Okay sure.", at: 0)], of: theirs).isEmpty)
+    #expect(FinalTranscript.echoes(in: [sentence(theirLines[0], at: 300)], of: theirs).isEmpty)
 }
 
 @Test func tapsSuggestNamesForSpeakers() {

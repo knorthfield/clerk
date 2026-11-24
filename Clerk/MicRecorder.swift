@@ -8,7 +8,7 @@ final class MicRecorder: @unchecked Sendable {
     func start(onSamples: @escaping @Sendable ([Float]) -> Void) throws {
         let input = engine.inputNode
         // No voice processing: it takes the microphone in a voice-chat mode, and then the meeting app's
-        // own voice processing gets silence. With speakers, the echo goes in `FinalTranscript.isEcho`.
+        // own voice processing gets silence. With speakers, the echo goes in `FinalTranscript.echoes`.
         let inputFormat = input.outputFormat(forBus: 0)
         guard let resampler = Resampler(from: inputFormat) else { throw MicRecorderError.unsupportedMicrophone }
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in

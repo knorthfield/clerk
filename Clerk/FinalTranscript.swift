@@ -44,11 +44,13 @@ enum FinalTranscript {
     /// The transcript, and the label ("Speaker 1"…) of each speaker ID.
     static func lines(chunks: [Chunk], otherSpeakers segments: [SpeakerSegment]) -> (lines: [Line], labels: [String: String]) {
         var labels: [String: String] = [:]
-        let all = chunks.flatMap { chunk in sentences(of: chunk).map { (sentence: $0, isMe: chunk.isMe) } }
-        let others = all.filter { !$0.isMe }.map(\.sentence)
-        let sentences = all
-            .filter { !$0.isMe || !isEcho($0.sentence, of: others) }
-            .sorted { $0.sentence.start < $1.sentence.start }
+        let mine = chunks.filter(\.isMe).flatMap(sentences(of:)).sorted { $0.start < $1.start }
+        let theirs = chunks.filter { !$0.isMe }.flatMap(sentences(of:))
+        let echoes = echoes(in: mine, of: theirs)
+        let sentences = (
+            mine.enumerated().filter { !echoes.contains($0.offset) }.map { (sentence: $0.element, isMe: true) }
+                + theirs.map { (sentence: $0, isMe: false) }
+        ).sorted { $0.sentence.start < $1.sentence.start }
         var lines: [Line] = []
         for (sentence, isMe) in sentences {
             let speaker: String
@@ -105,16 +107,42 @@ enum FinalTranscript {
     /// Splits a chunk into sentences, and finds the time of each sentence from the chunk's tokens.
     /// The tokens and the text have nearly the same letters, so the n-th letter of the text is
     /// in the token that holds the n-th letter of the tokens.
-    /// With speakers, the microphone also hears the other people. A sentence of yours is their echo if
-    /// one of their sentences at about the same time (2 s) has at least 60 % of its words.
-    static func isEcho(_ mine: Sentence, of others: [Sentence]) -> Bool {
-        let myWords = words(of: mine.text)
-        guard !myWords.isEmpty else { return false }
-        return others.contains { other in
-            guard other.start - 2 <= mine.end, mine.start <= other.end + 2 else { return false }
-            let theirWords = Set(words(of: other.text))
-            return Double(myWords.count { theirWords.contains($0) }) >= 0.6 * Double(myWords.count)
+    /// With speakers, the microphone also hears the other people, so their words show twice. Returns the
+    /// indices of your sentences (in time order) that are their echo. Like yogurt and Daisy:
+    /// - A sentence of yours is a candidate if one of theirs within 1.5 s has its words: all but a few
+    ///   for a short sentence, 60 % from 8 words. Under 3 words ("okay", "yes") is never a candidate.
+    /// - The whole meeting decides first: many close copies mean speakers, and then every candidate goes.
+    ///   Else (headphones) only runs of 3 or more candidates go: you may repeat someone's words yourself.
+    static func echoes(in mine: [Sentence], of theirs: [Sentence]) -> Set<Int> {
+        var candidates: [Int] = []
+        var closeCopies = 0
+        for (index, sentence) in mine.enumerated() {
+            let myWords = words(of: sentence.text)
+            guard myWords.count >= 3 else { continue }
+            let needed = myWords.count < 6 ? 0.95 : myWords.count < 8 ? 0.8 : 0.6
+            let overlap = theirs
+                .filter { $0.start - 1.5 <= sentence.end && sentence.start <= $0.end + 1.5 }
+                .map { other in
+                    let theirWords = Set(words(of: other.text))
+                    return Double(myWords.count { theirWords.contains($0) }) / Double(myWords.count)
+                }
+                .max() ?? 0
+            guard overlap >= needed else { continue }
+            candidates.append(index)
+            if myWords.count >= 6, overlap >= 0.8 { closeCopies += 1 }
         }
+        let speakersHeard = closeCopies >= 20 || (closeCopies >= 5 && Double(closeCopies) >= 0.1 * Double(mine.count))
+        if speakersHeard { return Set(candidates) }
+        var echoes: Set<Int> = []
+        var run: [Int] = []
+        for index in candidates + [Int.max] {
+            if let last = run.last, index != last + 1 {
+                if run.count >= 3 { echoes.formUnion(run) }
+                run = []
+            }
+            run.append(index)
+        }
+        return echoes
     }
 
     private static func words(of text: String) -> [String] {
